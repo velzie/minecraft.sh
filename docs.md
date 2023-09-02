@@ -57,6 +57,22 @@ pkt_hook_unknown () {
 } 	
 ```
 
+## pkt_hook_entity_spawn()
+called whenever an entity enters view distance (NOT A PLAYER)<br/> 	
+### arguments
+`(eid)`
+
+## pkt_hook_player_spawn()
+called whenever a player enters view distance<br/> 	
+### arguments
+`(eid)`
+
+## pkt_hook_entity_remove()
+called whenever an entity (OR PLAYER) is removed or exits view distance<br/> 	
+the entity directory gets deleted immediately after the hook exits 	
+### arguments
+`(eid)`
+
 ## pkt_respawn()
 respawn the player after a death<br/> 	
 
