@@ -61,7 +61,7 @@ disconnect(){
 		rm -rf "$PLAYER"
 	fi
 	rm -f $PIPE
-	kill -- -$(<$PARENT_PID)
+	kill $(<$LISTENER_PID)
 }
 
 listen() {
@@ -198,7 +198,7 @@ proc_pkt() {
 			pkt_send 20 "$id" # pong!
 			;;
 		*)
-			# echo "unknown packet $pkt_id"
+			pkt_hook_unknown
 			;;
 		esac
 		;;

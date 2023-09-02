@@ -34,10 +34,10 @@ while read line; do
         echo "### arguments"
         echo "\`$arguments\`"
     fi
-    if [ ! -z "$example" ]; then
+    if [ ! -z "${example:4}" ]; then
       example=${example//\$0/${command/\(\)/}}
       echo "### example"
-      echo -n "\`\`\`"
+      echo -n "\`\`\`bash"
       echo -n "$example"
       echo "\`\`\`"
     fi
