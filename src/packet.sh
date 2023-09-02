@@ -6,11 +6,6 @@ hexpacket_len() {
 	tovarint $((($(echo -n "$1" | fromhex | wc -c) + 1)))
 }
 
-# (packet_num: hex(2), data: hex)
-send_packet() {
-	echo -n "$(hexpacket_len "$2")$1$2" | fromhex >&3
-}
-
 get_seqid(){
 	SEQ_ID=$(<$PLAYER/seqid)
 }
@@ -19,7 +14,19 @@ incrm_seqid(){
 	echo -n $(( SEQ_ID + 1))>"$PLAYER/seqid"
 }
 
+### send a raw serverbound packet
+# $0 2f "$(tovarint 1)"
+# # "2f" is the serverbound packet id for "swing arm" and 1 here means "left hand"
+# # see the full list of packets at https://wiki.vg/Protocol
+# (packet_num: hex(2), data: hex)
+send_packet() {
+	echo -n "$(hexpacket_len "$2")$1$2" | fromhex >&3
+}
+
 ### respawn the player after a death
+# pkt_hook_combat_death() {
+# 	$0
+# }
 pkt_respawn() {
 	send_packet 07 "$(tovarint 0)"
 }
