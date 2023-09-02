@@ -2,17 +2,21 @@ source src/minecraft.sh
 source examples/demohooks.sh
 trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 
-# note: may accidentally target invalid entities and get kicked
-
-pkt_hook_entity_move(){
-	local eid=$1
-	if [ ! -z $eid ] && [ ! $(<$PLAYER/eid) = $eid ]; then
-	  pkt_attack $eid
-    pkt_swing_arm $ARM_RIGHT
-    # the arm swing is optional, but it looks cool
-	fi
-} 	
+# list of every hostile mob type
+ENTITIES_TO_TARGET="7|12|19|23|25|27|30|31|42|46|47|50|51|62|71|73|74|80|95|97|107|111|112|113|114|117|118|121|122"
 
 login
 
-tail -f /dev/null
+while true; do
+	for path in "$ENTITIES/"*; do
+		eid=${path##*\/}
+
+		# make sure we aren't going to accidentally attack ourselves (instant kick)
+		if [ "$eid" != "*" ] && [ $(<$PLAYER/eid) != $eid ] && [[ "$(<$path/type)" =~ $ENTITIES_TO_TARGET ]]; then
+	  	pkt_attack $eid
+	  	# we don't *need* to send the arm swing packet but it looks cool
+   		pkt_swing_arm $ARM_RIGHT
+		fi
+	done
+	sleep 1
+done

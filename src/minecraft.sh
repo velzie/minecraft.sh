@@ -4,6 +4,7 @@ SRC=${SRC/%minecraft.sh/.\/}
 source "$SRC/types.sh"
 source "$SRC/packet.sh"
 source "$SRC/util.sh"
+source "$SRC/hooks.sh"
 
 
 # default consts
@@ -34,10 +35,12 @@ login() {
 	PLAYER_ID=$RANDOM
 	PIPE="$TEMP/$PLAYER_ID.pipe"
 	PLAYER="$TEMP/$USERNAME:$PLAYER_ID.mem"
+	ENTITIES="$PLAYER/entities"
 	LISTENER_PID="$TEMP/$PLAYER_ID.pid"
 	PARENT_PID="$TEMP/$PLAYER_ID.ppid"
 	mkfifo $PIPE
 	mkdir -p "$PLAYER"
+	mkdir -p "$ENTITIES"
 
 	echo "ID: $PLAYER_ID"
 
@@ -58,7 +61,7 @@ disconnect(){
 	exec 3>&-
 	exec 3<&-
 	if [ ! -z "$PLAYER" ] && [ -d "$PLAYER" ]; then
-		rm -rf "$PLAYER"
+		rm -r "$PLAYER"
 	fi
 	rm -f $PIPE
 	kill $(<$LISTENER_PID)
@@ -187,11 +190,56 @@ proc_pkt() {
 			# echo "$eid moved $dx $dy $dz"
 			pkt_hook_entity_move $eid
 			;;
-		07)
+		01) # spawn entity
 			local eid=$(fromvarint)
-			decode_position $(readhex 8)
-			echo "pos: $x $y $z $(readhex 1)"
 
+			local entity="$ENTITIES/$eid"
+			mkdir -p "$entity"
+
+			local uuid=$(readhex 16)
+			local type=$(fromvarint)
+
+			readhex 8 > "$entity/x"
+			readhex 8 > "$entity/y"
+			readhex 8 > "$entity/z"
+		
+			eatn 3 # angle stuff
+
+			local data=$(fromvarint)
+
+			echosafe "$uuid" > "$entity/uuid"
+			echosafe "$type" > "$entity/type"
+			echosafe "$data" > "$entity/data"
+			
+			pkt_hook_entity_spawn "$eid"
+			;;
+		03) # spawn player
+			local eid=$(fromvarint)
+			local uuid=$(readhex 16)
+
+
+			local entity="$ENTITIES/$eid"
+			mkdir -p "$entity"
+			
+			readhex 8 > "$entity/x"
+			readhex 8 > "$entity/y"
+			readhex 8 > "$entity/z"
+
+			eatn 2 # angle stuff
+
+			echosafe "$uuid" > "$entity/uuid"
+			echosafe "122" > "$entity/type" # id for "player"
+			>"$entity/dat"
+
+			pkt_hook_player_spawn "$eid"
+			;;
+		3e) # remove entities
+			local count=$(fromvarint)
+			for i in $(seq $count); do
+				local eid=$(fromvarint)
+				pkt_hook_entity_remove "$eid"
+				rm -r "$ENTITIES/$eid"
+			done
 			;;
 		32) # ping!
 			local id=$(readhex 4)

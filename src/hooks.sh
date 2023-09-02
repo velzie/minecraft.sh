@@ -1,7 +1,7 @@
 # shellcheck shell=bash
-
-
 # these are the definitions for each hook function. for actual uses of these, check ../examples/demohooks.sh
+
+
 
 ### called after login and the state switches to "play"
 ### it is NOT safe to send packets until this function is called
@@ -13,7 +13,7 @@ pkt_hook_login() {
 ### called whenever an entity in render distance moves
 # (eid)
 pkt_hook_entity_move() {
-
+  :
 }
 ### called whenever a chat message is sent
 # (uuid, message: hex string, timestamp: hex long, metadata: json string as hex)
@@ -53,5 +53,24 @@ pkt_hook_set_health() {
 # }
 # sets "pkt_id", data is read from stdin
 pkt_hook_unknown() {
+  :
+}
+
+### called whenever an entity enters view distance (NOT A PLAYER)
+# (eid)
+pkt_hook_entity_spawn(){
+  :
+}
+
+### called whenever a player enters view distance
+# (eid)
+pkt_hook_player_spawn(){
+  :
+}
+
+### called whenever an entity (OR PLAYER) is removed or exits view distance
+### the entity directory gets deleted immediately after the hook exits
+# (eid)
+pkt_hook_entity_remove(){
   :
 }

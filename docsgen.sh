@@ -11,7 +11,7 @@ EOF
 
 while read line; do
   if [[ "$line" =~ \#\#\# ]]; then
-    desc="${line:4}${IFS}"
+    desc="${line:4}<br/>${IFS}"
     while read line && [[ "$line" =~ \#\#\# ]]; do
       desc+="${line:4}${IFS}"
     done

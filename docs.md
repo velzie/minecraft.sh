@@ -4,29 +4,29 @@
 # List of methods and hooks
 auto-generated from comments by ./docsgen.sh
 ## pkt_hook_login()
-called after login and the state switches to "play" 	
+called after login and the state switches to "play"<br/> 	
 it is NOT safe to send packets until this function is called 	
 ### arguments
 `(username:string)`
 
 ## pkt_hook_entity_move()
-called whenever an entity in render distance moves 	
+called whenever an entity in render distance moves<br/> 	
 ### arguments
 `(eid)`
 
 ## pkt_hook_chat()
-called whenever a chat message is sent 	
+called whenever a chat message is sent<br/> 	
 ### arguments
 `(uuid, message: hex string, timestamp: hex long, metadata: json string as hex)`
 
 ## pkt_hook_combat_death()
-called when the player dies in any way 	
+called when the player dies in any way<br/> 	
 unless you have a reason not to, you should call pkt_respawn inside the hook 	
 ### arguments
 `(reason: json string as hex)`
 
 ## pkt_hook_set_health()
-called whenever the player's health changes 	
+called whenever the player's health changes<br/> 	
 ### arguments
 `(health: decimal string, food: int, saturation: decimal string)`
 ### example
@@ -41,7 +41,7 @@ pkt_hook_set_health () {
 ```
 
 ## pkt_hook_unknown()
-called whenever an unhandled packet gets processed 	
+called whenever an unhandled packet gets processed<br/> 	
 ### arguments
 `sets "pkt_id", data is read from stdin`
 ### example
@@ -58,10 +58,10 @@ pkt_hook_unknown () {
 ```
 
 ## pkt_respawn()
-respawn the player after a death 	
+respawn the player after a death<br/> 	
 
 ## pkt_chat()
-sends a message in public chat 	
+sends a message in public chat<br/> 	
 ### arguments
 `(message: string)`
 ### example
@@ -70,7 +70,7 @@ pkt_chat "hello! I sent a chat message!"
 ```
 
 ## pkt_chat_command()
-runs a server command 	
+runs a server command<br/> 	
 note: there is currently no way to recieve the feedback after the command 	
 ### arguments
 `(command: string)`
@@ -80,7 +80,7 @@ pkt_chat_command "kill CoolElectronics"
 ```
 
 ## pkt_swing_arm()
-swings the player arm 	
+swings the player arm<br/> 	
 ### arguments
 `(arm: ARM_LEFT | ARM_RIGHT)`
 ### example
@@ -89,7 +89,7 @@ pkt_swing_arm $ARM_RIGHT
 ```
 
 ## pkt_interact()
-interact with an entity 	
+interact with an entity<br/> 	
 in the standard client, this happens when right clicking something (mounting a horse, trading with a villager, etc) 	
 ### arguments
 `(eid, arm: arm_left | arm_right, sneaking: 0 | 1)`
@@ -103,7 +103,7 @@ hook_entity_move(){
 ```
 
 ## pkt_attack()
-attack an entity 	
+attack an entity<br/> 	
 ### arguments
 `(eid)`
 ### example
@@ -116,12 +116,12 @@ pkt_hook_entity_move(){
 ```
 
 ## pkt_drop()
-drop the currently held item 	
+drop the currently held item<br/> 	
 ### arguments
 `(DROP_ITEM|DROP_STACK)`
 
 ## pkt_dig()
-attempt to mine a block 	
+attempt to mine a block<br/> 	
 ### arguments
 `(DIG_START | DIG_CANCEL | DIG_FINISH, x, y, z, face)`
 ### example
@@ -132,7 +132,7 @@ pkt_dig $DIG_FINISH 12 50 14
 ```
 
 ## pkt_sneak()
-sneak or unsneak 	
+sneak or unsneak<br/> 	
 ### arguments
 `(SNEAK|UNSNEAK)`
 

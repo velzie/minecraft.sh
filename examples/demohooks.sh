@@ -29,3 +29,7 @@ pkt_hook_combat_death(){
 pkt_hook_set_health(){
 	echo "health: $1, food: $2, saturation: $3"
 }
+
+pkt_hook_player_spawn(){
+	echo "player $eid spawned"
+}
