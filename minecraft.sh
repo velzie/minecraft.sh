@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 . ./types.sh
+. ./packet.sh
+. ./util.sh
+. ./defaulthooks.sh
 
 # consts
 HOST=localhost
@@ -16,21 +19,8 @@ VERSION=763 # 1.20.1, the latest version at the time of making this. be warned, 
 # note: do not trust this unless you know what thread you're on
 STATE=0
 
-
-hexpacket_len() {
-	tovarint $((($(echo -n "$1" | fromhex | wc -c) + 1)))
-}
-
-# (packet_num: hex(2), data: hex(unsized))
-send_packet() {
-	echo -n "$(hexpacket_len "$2")$1$2" | fromhex >&3
-}
-# (bytes:int) -> hex string
-readhex() {
-	head -c $1 | tohex
-}
-
 login() {
+	echo ??
 
 	if ! [ -d "$TEMP" ]; then
 		mkdir "$TEMP"
@@ -59,7 +49,6 @@ login() {
 
 }
 
-
 cleanup(){
 	kill $LISTENER_PID
 	exec 3>&-
@@ -80,10 +69,9 @@ listen() {
 		# motivation for using an FIFO:
 		# - subshells CANNOT be used because of the need to persist state between packet frames
 		# - here-strings CANNOT be used because of nul bytes (it's slower anyway probably
-		# - temporary files are too slow, we need to respond to keepalives as soon as possible to avoid a kick
 		# - there's no reason cmd <(subshell) wouldn't work, but it doesn't and i don't know why
 
-		head -c $len <&3 >$PIPE &
+		readn $len <&3 >$PIPE &
 		proc_pkt <$PIPE
 
 	done
@@ -112,9 +100,8 @@ proc_pkt() {
 			uuid=$(readhex 16)
 			len=$(fromvarint)
 			read -r "-n$len" username
-			echo "logged in as $username"
 			STATE=3
-			pkt_respawn
+			pkt_hook_login "$username"
 			;;
 		esac
 		;;
@@ -131,7 +118,7 @@ proc_pkt() {
 
 		45) # server data
 			local len=$(fromvarint)
-			local motd=$(head -c$len)
+			read -n$len motd
 
 			echo "MOTD: $motd"
 			;;
@@ -140,45 +127,69 @@ proc_pkt() {
 			;;
 		35) # player chat
 			local uuid=$(readhex 16)
-			local index=$(fromvarint) # unknown what this does
-			head -c1 >/dev/null      # eat the signature bool
+			local index=$(fromvarint)    # unknown what this does
+			eatn 1                       # eat the signature bool
 			local len=$(fromvarint)
-			local message=$(head -c$len)
+			local message=$(readhex $len)
 			local timestamp=$(readhex 8)
-			local salt=$(readhex 8)    # crypto related? idk
-			local unknown=$(readhex 6) # no idea what this is
+			local salt=$(readhex 8)      # crypto related? idk
+			local unknown=$(readhex 6)   # no idea what this is
 
-			local username=$(jq -r ".insertion") # i don't technically *need* jq but it's easy
-
-			echo "<$username> $message"
+			pkt_hook_chat "$uuid" "$message" "$timestamp" "$(readhex 999999)"
 			;;
 		1b) # disguised chat message. not really sure when this is used?
 			local len=$(fromvarint)
-			local message=$(head -c$len)
+			local message=$(readn $len)
 			len=$(fromvarint)
-			local typename=$(head -c$len)
+			local typename=$(readn $len)
 			local hasname=$(readhex 1)
 			len=$(fromvarint)
-			local name=$(head -c$len)
+			local name=$(readn $len)
 			echo "<system>-$message-$typename-$hasname-$name"
 			;;
 		38) # combat death
 			local id=$(fromvarint)
 			local len=$(fromvarint)
-			local reason=$(jq -r ".translate")
-			echo "died! $reason"
-			pkt_respawn
+
+			pkt_hook_combat_death "$(readhex $len)"
 			;;
 		57) # set health
 			local health=$(fromfloat $(readhex 4))
 			local food=$(fromvarint)
 			local saturation=$(fromfloat $(readhex 4))
-			echo "health: $health, food: $food, saturation: $saturation"
+
+			pkt_hook_set_health "$health" "$food" "$saturation"
 			;;
 		28) # login
 			# get own entity-id. there are a bunch of other fields but i don't care about any of them
+			# for some reason the EID is sent as a short here, everywhere else it's a varint
 			echo -n $(( 0x$(readhex 4) )) >"$PLAYER/eid"
 			echo -n 0 >"$PLAYER/seqid"
+			;;
+		2b) # update entity position
+			local eid=$(fromvarint)
+			# local dx=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# local dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# local dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# echo "$eid moved $dx $dy $dz"
+
+			;;
+		2c) # update entity position and rotation
+			local eid=$(fromvarint)
+			# local dx=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# local dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# local dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# echo "$eid moved $dx $dy $dz"
+			;;
+		07)
+			local eid=$(fromvarint)
+			decode_position $(readhex 8)
+			echo "pos: $x $y $z $(readhex 1)"
+
+			;;
+		32) # ping!
+			local id=$(readhex 4)
+			pkt_send 20 "$id" # pong!
 			;;
 		*)
 			# echo "unknown packet $pkt_id"
@@ -189,59 +200,4 @@ proc_pkt() {
 
 	# purge all remaining data to stay in sync
 	cat >/dev/null
-}
-
-pkt_respawn() {
-	send_packet 07 "$(tovarint 0)"
-}
-
-pkt_chat() {
-	local pkt=$(tostring $1)   # message
-	pkt+=$(tolong $(date +%s)) # timestamp
-	pkt+=$(tolong $(date +%s)) # salt
-	pkt+="00"                  # has signature, bool(false)
-	pkt+="$(tovarint 1)"       # message count? idk what this means
-	pkt+="$(repeat 11 '00')"   # "acknowleged"?? no idea what this is either but if i spam exactly 11 zeros it seems to work
-	send_packet 05 "$pkt"
-}
-pkt_chat_command() {
-	local pkt=$(tostring "$1")   # message
-	pkt+=$(tolong $(date +%s)) # timestamp
-	pkt+=$(tolong $(date +%s)) # salt
-	pkt+=$(tovarint 0)         # idk some crypto bullshit
-	pkt+=$(tovarint 1)         # message count
-	pkt+="$(repeat 11 '00')"   # "acknowleged"
-	send_packet 04 "$pkt"
-}
-
-get_seqid(){
-	SEQ_ID=$(<$PLAYER/seqid)
-}
-incrm_seqid(){
-	echo -n $(( SEQ_ID + 1))>"$PLAYER/seqid"
-}
-
-# (arm: 0 | 1)
-pkt_swing_arm(){
-	send_packet 2f $(tovarint $1)
-}
-pkt_drop_item(){
-	get_seqid
-	send_packet 1d "$(tovarint 4)$(encode_position 0 0 0)$(tovarint 0)$(tovarint $SEQ_ID)"
-	incrm_seqid
-}
-pkt_drop_stack(){
-	get_seqid
-	send_packet 1d "$(tovarint 3)$(encode_position 0 0 0)$(tovarint 0)$(tovarint $SEQ_ID)"
-	incrm_seqid
-}
-pkt_sneak(){
-	get_seqid
-	send_packet 1e "$(tovarint $(<$PLAYER/eid))$(tovarint 0)$(tovarint $SEQ_ID)"
-	incrm_seqid
-}
-pkt_unsneak(){
-	get_seqid
-	send_packet 1e "$(tovarint $(<$PLAYER/eid))$(tovarint 1)$(tovarint $SEQ_ID)"
-	incrm_seqid
 }
