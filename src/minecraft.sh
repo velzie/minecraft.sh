@@ -1,10 +1,12 @@
 # shellcheck shell=bash
-. ./types.sh
-. ./packet.sh
-. ./util.sh
-. ./defaulthooks.sh
+SRC=${BASH_SOURCE%/*}
+SRC=${SRC/%minecraft.sh/.\/}
+source "$SRC/types.sh"
+source "$SRC/packet.sh"
+source "$SRC/util.sh"
 
-# consts
+
+# default consts
 HOST=localhost
 PORT=25565
 TEMP=/dev/shm/minecraft.sh
@@ -20,8 +22,6 @@ VERSION=763 # 1.20.1, the latest version at the time of making this. be warned, 
 STATE=0
 
 login() {
-	echo ??
-
 	if ! [ -d "$TEMP" ]; then
 		mkdir "$TEMP"
 	fi
@@ -34,8 +34,12 @@ login() {
 	PLAYER_ID=$RANDOM
 	PIPE="$TEMP/$PLAYER_ID.pipe"
 	PLAYER="$TEMP/$USERNAME:$PLAYER_ID.mem"
+	LISTENER_PID="$TEMP/$PLAYER_ID.pid"
+	PARENT_PID="$TEMP/$PLAYER_ID.ppid"
 	mkfifo $PIPE
 	mkdir -p "$PLAYER"
+
+	echo "ID: $PLAYER_ID"
 
 	exec 3<>/dev/tcp/$HOST/$PORT
 
@@ -45,18 +49,19 @@ login() {
 	send_packet 00 "$(tostring $USERNAME)00"
 
 	listen <&3 &
-	LISTENER_PID=$!
+	echo "$!" >$LISTENER_PID
+	echo "$$" >$PARENT_PID
 
 }
 
-cleanup(){
-	kill $LISTENER_PID
+disconnect(){
 	exec 3>&-
 	exec 3<&-
 	if [ ! -z "$PLAYER" ] && [ -d "$PLAYER" ]; then
 		rm -rf "$PLAYER"
 	fi
 	rm -f $PIPE
+	kill -- -$(<$PARENT_PID)
 }
 
 listen() {
@@ -81,7 +86,7 @@ proc_pkt() {
 	local pkt_id=$(readhex 1)
 	if [ "$pkt_id" == "" ]; then
 		echo "---- disconnected from server ----"
-		cleanup
+		disconnect
 		exit
 	fi
 
@@ -172,7 +177,7 @@ proc_pkt() {
 			# local dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# local dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# echo "$eid moved $dx $dy $dz"
-
+			pkt_hook_entity_move $eid
 			;;
 		2c) # update entity position and rotation
 			local eid=$(fromvarint)
@@ -180,6 +185,7 @@ proc_pkt() {
 			# local dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# local dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# echo "$eid moved $dx $dy $dz"
+			pkt_hook_entity_move $eid
 			;;
 		07)
 			local eid=$(fromvarint)
