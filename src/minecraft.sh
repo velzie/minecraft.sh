@@ -1,10 +1,15 @@
 # shellcheck shell=bash
-SRC=${BASH_SOURCE%/*}
-SRC=${SRC/%minecraft.sh/.\/}
-source "$SRC/types.sh"
-source "$SRC/packet.sh"
-source "$SRC/util.sh"
-source "$SRC/hooks.sh"
+# SRC=${BASH_SOURCE%/*}
+# SRC=${SRC/%minecraft.sh/.\/}
+# source "$SRC/types.sh"
+# source "$SRC/packet.sh"
+# source "$SRC/util.sh"
+# source "$SRC/hooks.sh"
+. src/hooks.sh
+. src/types.sh
+. src/packet.sh
+. src/types.sh
+. src/util.sh
 
 
 # default consts
@@ -14,15 +19,14 @@ TEMP=/dev/shm/minecraft.sh
 USERNAME=sh
 VERSION=763 # 1.20.1, the latest version at the time of making this. be warned, packet ids and format can change drastically between versions
 
+
+# states:
 # 0: handshaking
 # 1: pinging
 # 2: login
 # 3: play
-#
-# note: do not trust this unless you know what thread you're on
-STATE=0
 
-login() {
+mc_login() {
 	if ! [ -d "$TEMP" ]; then
 		mkdir "$TEMP"
 	fi
@@ -48,7 +52,7 @@ login() {
 
 	STATE=0
 	send_packet 00 "$(tovarint $VERSION)$(tostring $HOST)$(toshort $PORT)$(tovarint 2)"
-	STATE=2
+	STATE=3
 	send_packet 00 "$(tostring $USERNAME)00"
 
 	listen <&3 &
@@ -68,29 +72,39 @@ disconnect(){
 }
 
 listen() {
-
+	# here's the main loop! this gets run for every single packet the client processes
 	while true; do
 
 		# get packet length
 		len=$(fromvarint)
 
-		# motivation for using an FIFO:
-		# - subshells CANNOT be used because of the need to persist state between packet frames
-		# - here-strings CANNOT be used because of nul bytes (it's slower anyway probably
-		# - there's no reason cmd <(subshell) wouldn't work, but it doesn't and i don't know why
+		
+		# create a random temporary file and immediately dump the contents of the packet into it
+		#
+		# under any other circumstance this would be slower, but in this case it is neccesary because it won't be buffered by anything
+		# the biggest bottleneck is how fast we can readn the correct number of bytes, it does not matter what happens afterwards
+		# we need to process packets as fast as physically possible, if we fall out of sync we'll eventually fail to process 0x23 Keep Alive and the server will kick us
+		#
+		# despite my best efforts, standard bash tends to fall behind and will inevitably get kicked. ksh20 is fast enough for our use though
+		PACKET="$PLAYER/$RANDOM.tmp"
+		readn $len <&3 >$PACKET
 
-		readn $len <&3 >$PIPE &
-		proc_pkt <$PIPE
+		# fork(), reading the data we dumped and process it in parallel
+		{
+			proc_pkt <$PACKET
+			rm "$PACKET"
+		}&
 
 	done
 }
 
 proc_pkt() {
-	local pkt_id=$(readhex 1)
+	pkt_id=$(readhex 1)
 	if [ "$pkt_id" == "" ]; then
-		echo "---- disconnected from server ----"
-		disconnect
-		exit
+		# pkt_hook_disconnect
+		# disconnect
+		# exit
+		echo "??"
 	fi
 
 	case $STATE in
@@ -116,8 +130,8 @@ proc_pkt() {
 	3)
 		case $pkt_id in
 		1a) # disconnect
-			local len=$(fromvarint)
-			echo "kicked from server: $(cat)"
+			len=$(fromvarint)
+			pkt_hook_kicked "$(readhex 9999)"
 			;;
 		23) # keepalive
 			id=$(readhex 9999)
@@ -125,7 +139,7 @@ proc_pkt() {
 			;;
 
 		45) # server data
-			local len=$(fromvarint)
+			len=$(fromvarint)
 			read -n$len motd
 
 			echo "MOTD: $motd"
@@ -134,37 +148,37 @@ proc_pkt() {
 			# i'll leave this unimplemented it's annoying
 			;;
 		35) # player chat
-			local uuid=$(readhex 16)
-			local index=$(fromvarint)    # unknown what this does
+			uuid=$(readhex 16)
+			index=$(fromvarint)    # unknown what this does
 			eatn 1                       # eat the signature bool
-			local len=$(fromvarint)
-			local message=$(readhex $len)
-			local timestamp=$(readhex 8)
-			local salt=$(readhex 8)      # crypto related? idk
-			local unknown=$(readhex 6)   # no idea what this is
+			len=$(fromvarint)
+			message=$(readhex $len)
+			timestamp=$(readhex 8)
+			salt=$(readhex 8)      # crypto related? idk
+			unknown=$(readhex 6)   # no idea what this is
 
 			pkt_hook_chat "$uuid" "$message" "$timestamp" "$(readhex 999999)"
 			;;
 		1b) # disguised chat message. not really sure when this is used?
-			local len=$(fromvarint)
-			local message=$(readn $len)
 			len=$(fromvarint)
-			local typename=$(readn $len)
-			local hasname=$(readhex 1)
+			message=$(readn $len)
 			len=$(fromvarint)
-			local name=$(readn $len)
+			typename=$(readn $len)
+			hasname=$(readhex 1)
+			len=$(fromvarint)
+			name=$(readn $len)
 			echo "<system>-$message-$typename-$hasname-$name"
 			;;
 		38) # combat death
-			local id=$(fromvarint)
-			local len=$(fromvarint)
+			id=$(fromvarint)
+			len=$(fromvarint)
 
 			pkt_hook_combat_death "$(readhex $len)"
 			;;
 		57) # set health
-			local health=$(fromfloat $(readhex 4))
-			local food=$(fromvarint)
-			local saturation=$(fromfloat $(readhex 4))
+			health=$(fromfloat $(readhex 4))
+			food=$(fromvarint)
+			saturation=$(fromfloat $(readhex 4))
 
 			pkt_hook_set_health "$health" "$food" "$saturation"
 			;;
@@ -175,29 +189,29 @@ proc_pkt() {
 			echo -n 0 >"$PLAYER/seqid"
 			;;
 		2b) # update entity position
-			local eid=$(fromvarint)
-			# local dx=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
-			# local dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
-			# local dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			eid=$(fromvarint)
+			# dx=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# echo "$eid moved $dx $dy $dz"
-			pkt_hook_entity_move $eid
+			# pkt_hook_entity_move $eid
 			;;
 		2c) # update entity position and rotation
-			local eid=$(fromvarint)
-			# local dx=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
-			# local dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
-			# local dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# eid=$(fromvarint)
+			# dx=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
+			# dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# echo "$eid moved $dx $dy $dz"
-			pkt_hook_entity_move $eid
+			# pkt_hook_entity_move $eid
 			;;
 		01) # spawn entity
-			local eid=$(fromvarint)
+			eid=$(fromvarint)
 
-			local entity="$ENTITIES/$eid"
+			entity="$ENTITIES/$eid"
 			mkdir -p "$entity"
 
-			local uuid=$(readhex 16)
-			local type=$(fromvarint)
+			uuid=$(readhex 16)
+			type=$(fromvarint)
 
 			readhex 8 > "$entity/x"
 			readhex 8 > "$entity/y"
@@ -205,7 +219,7 @@ proc_pkt() {
 		
 			eatn 3 # angle stuff
 
-			local data=$(fromvarint)
+			data=$(fromvarint)
 
 			echosafe "$uuid" > "$entity/uuid"
 			echosafe "$type" > "$entity/type"
@@ -214,11 +228,11 @@ proc_pkt() {
 			pkt_hook_entity_spawn "$eid"
 			;;
 		03) # spawn player
-			local eid=$(fromvarint)
-			local uuid=$(readhex 16)
+			eid=$(fromvarint)
+			uuid=$(readhex 16)
 
 
-			local entity="$ENTITIES/$eid"
+			entity="$ENTITIES/$eid"
 			mkdir -p "$entity"
 			
 			readhex 8 > "$entity/x"
@@ -234,15 +248,15 @@ proc_pkt() {
 			pkt_hook_player_spawn "$eid"
 			;;
 		3e) # remove entities
-			local count=$(fromvarint)
+			count=$(fromvarint)
 			for i in $(seq $count); do
-				local eid=$(fromvarint)
+				eid=$(fromvarint)
 				pkt_hook_entity_remove "$eid"
 				rm -r "$ENTITIES/$eid"
 			done
 			;;
 		32) # ping!
-			local id=$(readhex 4)
+			id=$(readhex 4)
 			pkt_send 20 "$id" # pong!
 			;;
 		*)

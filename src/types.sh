@@ -2,10 +2,6 @@
 
 # (number) -> hex
 tovarint() {
-	local a
-	local b
-	local c
-	local out
 	out=$(printf '%02x' "$1")
 	if [[ $1 -lt 128 ]]; then
 		:
@@ -24,13 +20,10 @@ tovarint() {
 
 # binary | -> number
 fromvarint() {
-	local x
-	local uwu
-	local out
 	out=""
 	x=1
 	while true; do
-		uwu=$(dd count=1 bs=1 status=none | xxd -p)
+		uwu=$(readn 1 | tohex)
 
 		out=$((out + ((0x$uwu & 127) * x)))
 		x=$((x * 128))
@@ -82,9 +75,6 @@ decode_position() {
 
 # (x,y,z) -> hex
 encode_position() {
-	local x
-	local y
-	local z
 
 	x=$1
 	y=$2

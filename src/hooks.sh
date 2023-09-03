@@ -74,3 +74,20 @@ pkt_hook_player_spawn(){
 pkt_hook_entity_remove(){
   :
 }
+
+### called when the server kicks you for any reason
+### this is differnt from pkt_hook_disconnect because it only fires when the server kicks you, not if you lose connection for unrelated reasons
+# echo -n "kicked from server: "
+#	echosafe "$1" | fromhex
+#	echo
+#	(reason: json string as hex)
+pkt_hook_kicked(){
+ :
+}
+
+### called when the underlying TCP connection to the server closes, after pkt_hook_kicked
+pkt_hook_disconnect(){
+  :
+}
+
+

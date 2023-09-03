@@ -13,6 +13,6 @@ pkt_hook_set_health(){
 	fi
 } 	
 
-login
+mc_login
 
 tail -f /dev/null

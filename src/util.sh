@@ -3,17 +3,17 @@
 
 # read $1 bytes
 readn(){
-	head -c$1
+	head "-c$1"
 }
 
 # delete $1 bytes
 eatn(){
-	readn $1 >/dev/null
+	readn "$1" >/dev/null
 }
 
 # (bytes: number) -> hex string
 readhex() {
-	readn $1 | tohex
+	readn "$1" | tohex
 }
 
 # (repetitions: number, string) -> string

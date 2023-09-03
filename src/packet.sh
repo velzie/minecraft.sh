@@ -35,7 +35,7 @@ pkt_respawn() {
 # $0 "hello! I sent a chat message!"
 # (message: string)
 pkt_chat() {
-	local pkt=$(tostring "$1")   # message
+	pkt=$(tostring "$1")   # message
 	pkt+=$(tolong $(date +%s)) # timestamp
 	pkt+=$(tolong $(date +%s)) # salt
 	pkt+="00"                  # has signature, bool(false)
@@ -49,7 +49,7 @@ pkt_chat() {
 # $0 "kill CoolElectronics"
 # (command: string)
 pkt_chat_command() {
-	local pkt=$(tostring "$1") # message
+	pkt=$(tostring "$1") # message
 	pkt+=$(tolong $(date +%s)) # timestamp
 	pkt+=$(tolong $(date +%s)) # salt
 	pkt+=$(tovarint 0)         # idk some crypto bullshit
@@ -71,12 +71,12 @@ pkt_swing_arm(){
 ### in the standard client, this happens when right clicking something (mounting a horse, trading with a villager, etc)
 # # attempt to interact with every entity in view distance
 # hook_entity_move(){ 
-# 	local eid=$1
+# 	eid=$1
 # 	$0 $eid $ARM_RIGHT 0
 # }
 # (eid, arm: arm_left | arm_right, sneaking: 0 | 1)
 pkt_interact(){
-	local pkt=$(tovarint $1)
+	pkt=$(tovarint $1)
 	pkt+=$(tovarint 0) # enum for "innteract"
 	pkt+=$(tovarint $2)
 	pkt+=$(tobool $3)
@@ -87,12 +87,12 @@ pkt_interact(){
 ### attack an entity
 # # attempt to attack every entity in view distance
 # pkt_hook_entity_move(){ 
-# 	local eid=$1
+# 	eid=$1
 # 	$0 $eid
 # }
 # (eid)
 pkt_attack(){
-	local pkt=$(tovarint $1)
+	pkt=$(tovarint $1)
 	pkt+=$(tovarint 1) # enum for "attack"
 	pkt+="00" # "sneaking" i don't know why it needs to know this, but ok
 
@@ -112,7 +112,7 @@ DROP_STACK=3
 # (DROP_ITEM|DROP_STACK)
 pkt_drop(){
 	get_seqid
-	local pkt=$(tovarint $1)      # enum for "drop item"
+	pkt=$(tovarint $1)      # enum for "drop item"
 	pkt+=$(encode_position 0 0 0) # it's always 000, idk why
 	pkt+=$(tovarint $FACE_BOTTOM) # facing -Y, always
 	
@@ -131,7 +131,7 @@ DIG_FINISH=2
 # (DIG_START | DIG_CANCEL | DIG_FINISH, x, y, z, face)
 pkt_dig(){
 	get_seqid
-	local pkt=$(tovarint $1)
+	pkt=$(tovarint $1)
 	pkt+=$(encode_position "$2" "$3" "$4")
 	pkt+=$(tovarint $5) 
 	pkt+=$(tovarint $SEQ_ID)
@@ -145,7 +145,7 @@ UNSNEAK=1
 # (SNEAK|UNSNEAK)
 pkt_sneak(){
 	get_seqid
-	local pkt=$(tovarint $(<$PLAYER/eid)) # player entity id
+	pkt=$(tovarint $(<$PLAYER/eid)) # player entity id
 	pkt+=$(tovarint $1)                   # enum for sneak
 	pkt+=$(tovarint $SEQ_ID)
 	send_packet 1e "$pkt"

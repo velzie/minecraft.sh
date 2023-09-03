@@ -5,7 +5,7 @@ trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 # list of every hostile mob type
 ENTITIES_TO_TARGET="7|12|19|23|25|27|30|31|42|46|47|50|51|62|71|73|74|80|95|97|107|111|112|113|114|117|118|121|122"
 
-login
+mc_login
 
 while true; do
 	for path in "$ENTITIES/"*; do
