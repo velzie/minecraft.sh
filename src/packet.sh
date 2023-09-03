@@ -1,10 +1,5 @@
 # shellcheck shell=ksh
 
-hexpacket_len() {
-	# [todo] use expr or {#} instead
-	tovarint $(($(echo -n "$1" | fromhex | wc -c) + 1))
-}
-
 get_seqid() {
 	SEQ_ID=$(<"$PLAYER/seqid")
 }
@@ -19,7 +14,20 @@ incrm_seqid() {
 # # see the full list of packets at https://wiki.vg/Protocol
 # (packet_num: hex(2), data: hex)
 send_packet() {
-	echo -n "$(hexpacket_len "$2")$1$2" | fromhex >&3
+	# length of the to-be-compressed packet data + packet id
+	len=$(( ${#2} / 2 + 1 ))
+	if [ "$LZ_THRESHOLD" != "-1" ]; then
+		if (( $len >= $LZ_THRESHOLD )); then
+			echo -n "dropping packet $1"
+		else
+			# compression set, but don't compress packet
+			# add an extra byte to the length, we need to compensate for the "00" (compression length of 0)
+			echo -n "$(tovarint "$(( len + 1 ))")00$1$2" | fromhex>&3
+		fi
+	else
+		# compression isn't enabled, send as normal
+		echo -n "$(tovarint "$len")$1$2" | fromhex >&3
+	fi
 }
 
 ### respawn the player after a death

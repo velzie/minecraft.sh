@@ -3,7 +3,18 @@
 
 # read $1 bytes
 readn(){
-	head "-c$1"
+	# head "-c$1"
+	count=$1
+
+	while IFS= read -r -n1 -d $'\0' ch; do
+		if (( $((count--)) == 0 )); then break; fi
+		if [ -n "$ch" ]; then
+			echosafe "$ch"
+		else
+			echo -en "\0"
+		fi
+
+	done
 }
 
 # delete $1 bytes
@@ -14,11 +25,6 @@ eatn(){
 # (bytes: number) -> hex string
 readhex() {
 	readn "$1" | tohex
-}
-
-# (repetitions: number, string) -> string
-repeat() {
-	printf -- "$2%.0s" $(seq 1 $1)
 }
 
 echosafe(){

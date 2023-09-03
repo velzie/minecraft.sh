@@ -20,7 +20,8 @@ VERSION=763 # 1.20.1, the latest version at the time of making this. be warned, 
 # 2: login
 # 3: play
 
-mc_login() {
+
+start_login() {
 	if ! [ -d "$TEMP" ]; then
 		mkdir "$TEMP"
 	fi
@@ -38,19 +39,28 @@ mc_login() {
 	mkdir -p "$PLAYER"
 	mkdir -p "$ENTITIES"
 
+	tail -f /dev/null &
+	WAITPID=$!
+
 	echo "ID: $PLAYER_ID"
 
 	exec 3<>/dev/tcp/$HOST/$PORT
 
-	echo 0 >"$PLAYER/state"
+
+	LZ_THRESHOLD=-1
+	STATE=0
 	send_packet 00 "$(tovarint $VERSION)$(tostring $HOST)$(toshort $PORT)$(tovarint 2)"
-	echo 3 >"$PLAYER/state"
+	STATE=2
 	send_packet 00 "$(tostring $USERNAME)00"
 
 	listen <&3 &
 	echo "$!" >$LISTENER_PID
 	echo "$$" >$PARENT_PID
 
+}
+wait_on_login(){
+	wait "$WAITPID"
+	LZ_THRESHOLD=$(<"$PLAYER/lzthreshold")
 }
 
 disconnect() {
@@ -76,28 +86,48 @@ listen() {
 		# we need to process packets as fast as physically possible, if we fall out of sync we'll eventually fail to process 0x23 Keep Alive and the server will kick us
 		#
 		# despite my best efforts, standard bash tends to fall behind and will inevitably get kicked. ksh20 is fast enough for our use though
+		
 		PACKET="$PLAYER/$RANDOM.tmp"
 		readn "$len" <&3 >"$PACKET"
 
-		# fork(), reading the data we dumped and process it in parallel
-		{
-			proc_pkt <"$PACKET"
+		if [ "$STATE" = "3" ]; then
+			# fork(), reading the data we dumped and process it in parallel
+			{
+				deflate_pkt <"$PACKET"
+				rm "$PACKET"
+			} &
+		else
+			# do not fork until the state switches to play, the penalty from having to juggle constants in files is not worth it
+			deflate_pkt <"$PACKET"
 			rm "$PACKET"
-		} &
+		fi
 
 	done
 }
 
+deflate_pkt(){
+	if [ "$LZ_THRESHOLD" != "-1" ]; then
+		len=$(fromvarint)
+		if [ "$len" != "0" ]; then
+			zlib-flate -uncompress | proc_pkt
+		else
+			proc_pkt
+		fi
+	else
+		proc_pkt
+	fi
+}
+
 proc_pkt() {
+	
 	pkt_id=$(readhex 1)
 	if [ "$pkt_id" == "" ]; then
-		# pkt_hook_disconnect
-		# disconnect
-		# exit
-		echo "??"
+		pkt_hook_disconnect
+		disconnect
+		exit
 	fi
 
-	case "$(<"$PLAYER/state")" in
+	case $STATE in
 	0) ;;
 	1) ;;
 	2)
@@ -109,16 +139,31 @@ proc_pkt() {
 			return 1
 			;;
 		02) # login sucessful
+			echo "login???"
 			uuid=$(readhex 16)
 			len=$(fromvarint)
 			read -r "-n$len" username
-			echo 3 >"$PLAYER/state"
+			STATE=3
 			pkt_hook_login "$username"
+			;;
+		03)
+			LZ_THRESHOLD=$(fromvarint)
+			echo "$LZ_THRESHOLD">"$PLAYER/lzthreshold"
 			;;
 		esac
 		;;
 	3)
 		case $pkt_id in
+		28) # login (play)
+			# this function needs to be called before it's safe to do anything else
+			# get own entity-id. there are a bunch of other fields but i don't care about any of them
+			# for some reason the EID is sent as a short here, everywhere else it's a varint
+			echo -n $((0x$(readhex 4))) >"$PLAYER/eid"
+			echo -n 0 >"$PLAYER/seqid"
+
+			# killing a sigil lamb is the most efficient way that i know of unblocking `wait_on_login` on the parent
+			kill -9 "$WAITPID"
+			;;
 		1a) # disconnect
 			len=$(fromvarint)
 			pkt_hook_kicked "$(readhex 9999)"
@@ -171,12 +216,6 @@ proc_pkt() {
 			saturation=$(fromfloat "$(readhex 4)")
 
 			pkt_hook_set_health "$health" "$food" "$saturation"
-			;;
-		28) # login
-			# get own entity-id. there are a bunch of other fields but i don't care about any of them
-			# for some reason the EID is sent as a short here, everywhere else it's a varint
-			echo -n $((0x$(readhex 4))) >"$PLAYER/eid"
-			echo -n 0 >"$PLAYER/seqid"
 			;;
 		2b) # update entity position
 			eid=$(fromvarint)
@@ -254,7 +293,4 @@ proc_pkt() {
 		esac
 		;;
 	esac
-
-	# purge all remaining data to stay in sync
-	cat >/dev/null
 }

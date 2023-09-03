@@ -9,9 +9,9 @@ BLOCKS=("-4 81 3" "-4 81 1" "-5 82 1" "-5 82 0" "-5 81 -1")
 # if i was good at these sort of things i would have tried to make a rickroll thingy but oh well
 
 USERNAME=neil
-mc_login
+start_login
 
-sleep 3
+wait_on_login
 
 randsleep(){
   sleep $(( $(shuf -i 1-100 -n 1) / 75 ))
