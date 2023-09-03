@@ -1,16 +1,11 @@
-# shellcheck shell=bash
-# SRC=${BASH_SOURCE%/*}
-# SRC=${SRC/%minecraft.sh/.\/}
-# source "$SRC/types.sh"
-# source "$SRC/packet.sh"
-# source "$SRC/util.sh"
-# source "$SRC/hooks.sh"
-. src/hooks.sh
-. src/types.sh
-. src/packet.sh
-. src/types.sh
-. src/util.sh
+# shellcheck shell=ksh
+# shellcheck disable=SC2034
 
+source src/hooks.sh
+source src/types.sh
+source src/packet.sh
+source src/types.sh
+source src/util.sh
 
 # default consts
 HOST=localhost
@@ -18,7 +13,6 @@ PORT=25565
 TEMP=/dev/shm/minecraft.sh
 USERNAME=sh
 VERSION=763 # 1.20.1, the latest version at the time of making this. be warned, packet ids and format can change drastically between versions
-
 
 # states:
 # 0: handshaking
@@ -37,12 +31,10 @@ mc_login() {
 
 	# we need to create temporary files in memory because bash cannot send between subshells
 	PLAYER_ID=$RANDOM
-	PIPE="$TEMP/$PLAYER_ID.pipe"
 	PLAYER="$TEMP/$USERNAME:$PLAYER_ID.mem"
 	ENTITIES="$PLAYER/entities"
 	LISTENER_PID="$TEMP/$PLAYER_ID.pid"
 	PARENT_PID="$TEMP/$PLAYER_ID.ppid"
-	mkfifo $PIPE
 	mkdir -p "$PLAYER"
 	mkdir -p "$ENTITIES"
 
@@ -50,9 +42,9 @@ mc_login() {
 
 	exec 3<>/dev/tcp/$HOST/$PORT
 
-	STATE=0
+	echo 0 >"$PLAYER/state"
 	send_packet 00 "$(tovarint $VERSION)$(tostring $HOST)$(toshort $PORT)$(tovarint 2)"
-	STATE=3
+	echo 3 >"$PLAYER/state"
 	send_packet 00 "$(tostring $USERNAME)00"
 
 	listen <&3 &
@@ -61,14 +53,13 @@ mc_login() {
 
 }
 
-disconnect(){
+disconnect() {
 	exec 3>&-
 	exec 3<&-
-	if [ ! -z "$PLAYER" ] && [ -d "$PLAYER" ]; then
+	if [ -n "$PLAYER" ] && [ -d "$PLAYER" ]; then
 		rm -r "$PLAYER"
 	fi
-	rm -f $PIPE
-	kill $(<$LISTENER_PID)
+	kill "$(<"$LISTENER_PID")"
 }
 
 listen() {
@@ -78,7 +69,6 @@ listen() {
 		# get packet length
 		len=$(fromvarint)
 
-		
 		# create a random temporary file and immediately dump the contents of the packet into it
 		#
 		# under any other circumstance this would be slower, but in this case it is neccesary because it won't be buffered by anything
@@ -87,13 +77,13 @@ listen() {
 		#
 		# despite my best efforts, standard bash tends to fall behind and will inevitably get kicked. ksh20 is fast enough for our use though
 		PACKET="$PLAYER/$RANDOM.tmp"
-		readn $len <&3 >$PACKET
+		readn "$len" <&3 >"$PACKET"
 
 		# fork(), reading the data we dumped and process it in parallel
 		{
-			proc_pkt <$PACKET
+			proc_pkt <"$PACKET"
 			rm "$PACKET"
-		}&
+		} &
 
 	done
 }
@@ -107,7 +97,7 @@ proc_pkt() {
 		echo "??"
 	fi
 
-	case $STATE in
+	case "$(<"$PLAYER/state")" in
 	0) ;;
 	1) ;;
 	2)
@@ -122,7 +112,7 @@ proc_pkt() {
 			uuid=$(readhex 16)
 			len=$(fromvarint)
 			read -r "-n$len" username
-			STATE=3
+			echo 3 >"$PLAYER/state"
 			pkt_hook_login "$username"
 			;;
 		esac
@@ -140,7 +130,7 @@ proc_pkt() {
 
 		45) # server data
 			len=$(fromvarint)
-			read -n$len motd
+			read -rn"$len" motd
 
 			echo "MOTD: $motd"
 			;;
@@ -149,43 +139,43 @@ proc_pkt() {
 			;;
 		35) # player chat
 			uuid=$(readhex 16)
-			index=$(fromvarint)    # unknown what this does
-			eatn 1                       # eat the signature bool
+			index=$(fromvarint) # unknown what this does
+			eatn 1              # eat the signature bool
 			len=$(fromvarint)
-			message=$(readhex $len)
+			message=$(readhex "$len")
 			timestamp=$(readhex 8)
-			salt=$(readhex 8)      # crypto related? idk
-			unknown=$(readhex 6)   # no idea what this is
+			salt=$(readhex 8)    # crypto related? idk
+			unknown=$(readhex 6) # no idea what this is
 
 			pkt_hook_chat "$uuid" "$message" "$timestamp" "$(readhex 999999)"
 			;;
 		1b) # disguised chat message. not really sure when this is used?
 			len=$(fromvarint)
-			message=$(readn $len)
+			message=$(readn "$len")
 			len=$(fromvarint)
-			typename=$(readn $len)
+			typename=$(readn "$len")
 			hasname=$(readhex 1)
 			len=$(fromvarint)
-			name=$(readn $len)
+			name=$(readn "$len")
 			echo "<system>-$message-$typename-$hasname-$name"
 			;;
 		38) # combat death
 			id=$(fromvarint)
 			len=$(fromvarint)
 
-			pkt_hook_combat_death "$(readhex $len)"
+			pkt_hook_combat_death "$(readhex "$len")"
 			;;
 		57) # set health
-			health=$(fromfloat $(readhex 4))
+			health=$(fromfloat "$(readhex 4)")
 			food=$(fromvarint)
-			saturation=$(fromfloat $(readhex 4))
+			saturation=$(fromfloat "$(readhex 4)")
 
 			pkt_hook_set_health "$health" "$food" "$saturation"
 			;;
 		28) # login
 			# get own entity-id. there are a bunch of other fields but i don't care about any of them
 			# for some reason the EID is sent as a short here, everywhere else it's a varint
-			echo -n $(( 0x$(readhex 4) )) >"$PLAYER/eid"
+			echo -n $((0x$(readhex 4))) >"$PLAYER/eid"
 			echo -n 0 >"$PLAYER/seqid"
 			;;
 		2b) # update entity position
@@ -213,46 +203,45 @@ proc_pkt() {
 			uuid=$(readhex 16)
 			type=$(fromvarint)
 
-			readhex 8 > "$entity/x"
-			readhex 8 > "$entity/y"
-			readhex 8 > "$entity/z"
-		
+			readhex 8 >"$entity/x"
+			readhex 8 >"$entity/y"
+			readhex 8 >"$entity/z"
+
 			eatn 3 # angle stuff
 
 			data=$(fromvarint)
 
-			echosafe "$uuid" > "$entity/uuid"
-			echosafe "$type" > "$entity/type"
-			echosafe "$data" > "$entity/data"
-			
+			echosafe "$uuid" >"$entity/uuid"
+			echosafe "$type" >"$entity/type"
+			echosafe "$data" >"$entity/data"
+
 			pkt_hook_entity_spawn "$eid"
 			;;
 		03) # spawn player
 			eid=$(fromvarint)
 			uuid=$(readhex 16)
 
-
 			entity="$ENTITIES/$eid"
 			mkdir -p "$entity"
-			
-			readhex 8 > "$entity/x"
-			readhex 8 > "$entity/y"
-			readhex 8 > "$entity/z"
+
+			readhex 8 >"$entity/x"
+			readhex 8 >"$entity/y"
+			readhex 8 >"$entity/z"
 
 			eatn 2 # angle stuff
 
-			echosafe "$uuid" > "$entity/uuid"
-			echosafe "122" > "$entity/type" # id for "player"
-			>"$entity/dat"
+			echosafe "$uuid" >"$entity/uuid"
+			echosafe "122" >"$entity/type" # id for "player"
+			: >"$entity/dat"
 
 			pkt_hook_player_spawn "$eid"
 			;;
 		3e) # remove entities
 			count=$(fromvarint)
-			for i in $(seq $count); do
+			for _i in $(seq "$count"); do
 				eid=$(fromvarint)
 				pkt_hook_entity_remove "$eid"
-				rm -r "$ENTITIES/$eid"
+				rm -r "${ENTITIES:?}/$eid"
 			done
 			;;
 		32) # ping!

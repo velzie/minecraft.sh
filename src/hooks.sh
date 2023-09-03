@@ -1,7 +1,5 @@
-# shellcheck shell=bash
+# shellcheck shell=ksh
 # these are the definitions for each hook function. for actual uses of these, check ../examples/demohooks.sh
-
-
 
 ### called after login and the state switches to "play"
 ### it is NOT safe to send packets until this function is called
@@ -18,7 +16,7 @@ pkt_hook_entity_move() {
 ### called whenever a chat message is sent
 # (uuid, message: hex string, timestamp: hex long, metadata: json string as hex)
 pkt_hook_chat() {
-	:
+  :
 }
 
 ### called when the player dies in any way
@@ -35,7 +33,7 @@ pkt_hook_combat_death() {
 #		  echo "health was $1, leaving!"
 #		  disconnect
 #	  fi
-# } 	
+# }
 # (health: decimal string, food: int, saturation: decimal string)
 pkt_hook_set_health() {
   :
@@ -58,20 +56,20 @@ pkt_hook_unknown() {
 
 ### called whenever an entity enters view distance (NOT A PLAYER)
 # (eid)
-pkt_hook_entity_spawn(){
+pkt_hook_entity_spawn() {
   :
 }
 
 ### called whenever a player enters view distance
 # (eid)
-pkt_hook_player_spawn(){
+pkt_hook_player_spawn() {
   :
 }
 
 ### called whenever an entity (OR PLAYER) is removed or exits view distance
 ### the entity directory gets deleted immediately after the hook exits
 # (eid)
-pkt_hook_entity_remove(){
+pkt_hook_entity_remove() {
   :
 }
 
@@ -81,13 +79,11 @@ pkt_hook_entity_remove(){
 #	echosafe "$1" | fromhex
 #	echo
 #	(reason: json string as hex)
-pkt_hook_kicked(){
- :
-}
-
-### called when the underlying TCP connection to the server closes, after pkt_hook_kicked
-pkt_hook_disconnect(){
+pkt_hook_kicked() {
   :
 }
 
-
+### called when the underlying TCP connection to the server closes, after pkt_hook_kicked
+pkt_hook_disconnect() {
+  :
+}

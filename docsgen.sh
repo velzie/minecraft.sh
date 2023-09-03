@@ -1,7 +1,7 @@
 #!/bin/bash
 {
 
-  cat<<EOF
+  cat <<EOF
 # Documentation
   
 
@@ -9,42 +9,42 @@
 auto-generated from comments by ./docsgen.sh
 EOF
 
-while read line; do
-  if [[ "$line" =~ \#\#\# ]]; then
-    desc="${line:4}<br/>${IFS}"
-    while read line && [[ "$line" =~ \#\#\# ]]; do
-      desc+="${line:4}${IFS}"
-    done
+  while read -r line; do
+    if [[ "$line" =~ \#\#\# ]]; then
+      desc="${line:4}<br/>${IFS}"
+      while read -r line && [[ "$line" =~ \#\#\# ]]; do
+        desc+="${line:4}${IFS}"
+      done
 
-    example=""
-    while true; do
-      if [[ "$line" =~ ^[^#]*\(\) ]]; then
-        arguments=$toadd
-        command=$BASH_REMATCH
-        break
-      else
-        example+="$toadd$IFS"
-        toadd=${line:2}
-      fi
-      read line
-    done
-    echo "## $command"
-    echo -n "$desc"
-    if [ ! -z "$arguments" ]; then
+      example=""
+      while true; do
+        if [[ "$line" =~ ^[^#]*\(\) ]]; then
+          arguments=$toadd
+          command=$BASH_REMATCH
+          break
+        else
+          example+="$toadd$IFS"
+          toadd=${line:2}
+        fi
+        read -r line
+      done
+      echo "## $command"
+      echo -n "$desc"
+      if [ -n "$arguments" ]; then
         echo "### arguments"
         echo "\`$arguments\`"
+      fi
+      if [ -n "${example:4}" ]; then
+        example=${example//\$0/${command/\(\)/}}
+        echo "### example"
+        echo -n "\`\`\`bash"
+        echo -n "$example"
+        echo "\`\`\`"
+      fi
+      arguments=""
+      toadd=""
+      echo
     fi
-    if [ ! -z "${example:4}" ]; then
-      example=${example//\$0/${command/\(\)/}}
-      echo "### example"
-      echo -n "\`\`\`bash"
-      echo -n "$example"
-      echo "\`\`\`"
-    fi
-    arguments=""
-    toadd=""
-    echo
-  fi
-done<<<$(cat src/*.sh)
+  done <<<"$(cat src/*.sh)"
 
-}>docs.md
+} >docs.md

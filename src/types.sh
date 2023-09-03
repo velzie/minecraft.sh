@@ -1,4 +1,4 @@
-# shellcheck shell=bash
+# shellcheck shell=ksh
 
 # (number) -> hex
 tovarint() {
@@ -36,7 +36,7 @@ fromvarint() {
 
 # (string) -> hex
 tostring() {
-	echo -n "$(tovarint $(expr length "$1"))$(echosafe "$1" | tohex)"
+	echo -n "$(tovarint "${#1}")$(echosafe "$1" | tohex)"
 }
 
 # (number) -> hex
@@ -67,10 +67,10 @@ decode_position() {
 	x=$((0x$1 >> 38))
 	y=$((0x$1 & 0xFFF))
 	z=$(((0x$1 >> 12) & 0x3FFFFFF))
-	
-	[[ $x -gt 33554431 ]] && x=$((x-67108864))
-	[[ $y -gt 2047 ]] && y=$((y-4095))
-	[[ $z -gt 33554431 ]] && z=$((z-67108864))
+
+	[[ $x -gt 33554431 ]] && x=$((x - 67108864))
+	[[ $y -gt 2047 ]] && y=$((y - 4095))
+	[[ $z -gt 33554431 ]] && z=$((z - 67108864))
 }
 
 # (x,y,z) -> hex
@@ -80,9 +80,9 @@ encode_position() {
 	y=$2
 	z=$3
 
-	[[ $x -lt 33554433 ]] && x=$((x+67108864))
-	[[ $y -lt 2049 ]] && y=$((y+4096))
-	[[ $z -lt 33554433 ]] && z=$((z+67108864))
-	
-	printf "%016x" $((((x & 0x3FFFFFF)<<38) | ((z & 0x3FFFFFF)<<12) | (y & 0xFFF)))
+	[[ $x -lt 33554433 ]] && x=$((x + 67108864))
+	[[ $y -lt 2049 ]] && y=$((y + 4096))
+	[[ $z -lt 33554433 ]] && z=$((z + 67108864))
+
+	printf "%016x" $((((x & 0x3FFFFFF) << 38) | ((z & 0x3FFFFFF) << 12) | (y & 0xFFF)))
 }
