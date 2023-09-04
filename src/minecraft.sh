@@ -1,11 +1,11 @@
 # shellcheck shell=ksh
 # shellcheck disable=SC2034
 
-source src/hooks.sh
-source src/types.sh
-source src/packet.sh
-source src/types.sh
-source src/util.sh
+. src/hooks.sh
+. src/types.sh
+. src/packet.sh
+. src/types.sh
+. src/util.sh
 
 # default consts
 HOST=localhost
@@ -39,15 +39,18 @@ start_login() {
 	mkdir -p "$PLAYER"
 	mkdir -p "$ENTITIES"
 
-	tail -f /dev/null &
+
+	# spawn sigil process
+	( read <> <(:) ) &
 	WAITPID=$!
 
-	echo "ID: $PLAYER_ID"
 
+	echo "ID: $PLAYER_ID"
 	exec 3<>/dev/tcp/$HOST/$PORT
 
 
 	LZ_THRESHOLD=-1
+	echo "$LZ_THRESHOLD">"$PLAYER/lzthreshold"
 	STATE=0
 	send_packet 00 "$(tovarint $VERSION)$(tostring $HOST)$(toshort $PORT)$(tovarint 2)"
 	STATE=2
@@ -59,7 +62,7 @@ start_login() {
 
 }
 wait_on_login(){
-	wait "$WAITPID"
+	wait "$WAITPID">/dev/null
 	LZ_THRESHOLD=$(<"$PLAYER/lzthreshold")
 }
 
@@ -79,6 +82,13 @@ listen() {
 		# get packet length
 		len=$(fromvarint)
 
+
+		if [ "$len" == "" ]; then
+
+			echo "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+			pkt_hook_disconnect
+			disconnect
+		fi
 		# create a random temporary file and immediately dump the contents of the packet into it
 		#
 		# under any other circumstance this would be slower, but in this case it is neccesary because it won't be buffered by anything
@@ -87,41 +97,50 @@ listen() {
 		#
 		# despite my best efforts, standard bash tends to fall behind and will inevitably get kicked. ksh20 is fast enough for our use though
 		
-		PACKET="$PLAYER/$RANDOM.tmp"
+		PACKET="$PLAYER/$RANDOM.dmp"
 		readn "$len" <&3 >"$PACKET"
 
 		if [ "$STATE" = "3" ]; then
 			# fork(), reading the data we dumped and process it in parallel
 			{
-				deflate_pkt <"$PACKET"
-				rm "$PACKET"
+				deflate_pkt
 			} &
 		else
 			# do not fork until the state switches to play, the penalty from having to juggle constants in files is not worth it
-			deflate_pkt <"$PACKET"
-			rm "$PACKET"
+			deflate_pkt
 		fi
 
 	done
 }
 
 deflate_pkt(){
+	if [ ! -f "$PACKET" ]; then
+		echo "dropped packet of length $len"
+		# pkt_hook_disconnect
+		# disconnect
+		return
+	fi
+
+	{
 	if [ "$LZ_THRESHOLD" != "-1" ]; then
 		len=$(fromvarint)
 		if [ "$len" != "0" ]; then
-			zlib-flate -uncompress | proc_pkt
+			fromlz | proc_pkt
 		else
 			proc_pkt
 		fi
 	else
 		proc_pkt
 	fi
+	} <"$PACKET"
+	rm "$PACKET"
 }
 
 proc_pkt() {
 	
 	pkt_id=$(readhex 1)
 	if [ "$pkt_id" == "" ]; then
+		echo "WAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 		pkt_hook_disconnect
 		disconnect
 		exit

@@ -17,13 +17,26 @@ send_packet() {
 	# length of the to-be-compressed packet data + packet id
 	len=$(( ${#2} / 2 + 1 ))
 	if [ "$LZ_THRESHOLD" != "-1" ]; then
-		if (( $len >= $LZ_THRESHOLD )); then
-			echo -n "dropping packet $1"
-		else
+
+		# buggy code for packet compression
+		# compression is actually optional C2S so it's safe to ignore
+
+		# if (( $len >= $LZ_THRESHOLD )); then
+		# 	
+		# 	# data to be compressed (packet id + packet data)
+		# 	pkt="$1$2"
+		# 	pkt_compressed="$(echo -n "$pkt" | fromhex | tolz | tohex)"
+		#
+		#
+		# 	# length of compressed packet, where $len is the length of the uncompressed packet
+		# 	pkt_len=$(( ${#pkt_compressed} / 2 ))
+		#
+		# 	echo -n "$(tovarint "$pkt_len")$(tovarint "$len")$pkt_compressed" | fromhex >&3
+		# else
 			# compression set, but don't compress packet
 			# add an extra byte to the length, we need to compensate for the "00" (compression length of 0)
 			echo -n "$(tovarint "$(( len + 1 ))")00$1$2" | fromhex>&3
-		fi
+		# fi
 	else
 		# compression isn't enabled, send as normal
 		echo -n "$(tovarint "$len")$1$2" | fromhex >&3
@@ -87,6 +100,17 @@ pkt_interact() {
 	pkt+=$(tovarint 0) # enum for "innteract"
 	pkt+=$(tovarint "$2")
 	pkt+=$(tobool "$3")
+	send_packet 10 "$pkt"
+}
+
+pkt_block_interact(){
+	pkt=$(tovarint "$(<"$PLAYER/eid")")
+	pkt+=$(tovarint 2)
+	pkt+=$1
+	pkt+=$2
+	pkt+=$3
+	pkt+=$(tovarint 0)
+	pkt+=$(tobool 0)
 	send_packet 10 "$pkt"
 
 }
@@ -160,5 +184,11 @@ pkt_sneak() {
 }
 
 pkt_use_item_on() {
-	send_packet 31 "$(tovarint 0)$(encode_position 337 49 49)$(tovarint 1)000000000000000000000000000$(tovarint 23)"
+	get_seqid
+	send_packet 31 "$(tovarint 0)$(encode_position 7 -60 -2)$(tovarint 1)3f0000003f8000003f000000$(tobool 0)$(tovarint "$SEQ_ID")"
+	pkt_swing_arm 0
+	incrm_seqid
+	get_seqid
+	# send_packet 32 "$(tovarint 0)$(tovarint $SEQ_ID)"
+	incrm_seqid
 }

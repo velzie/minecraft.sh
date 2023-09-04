@@ -56,9 +56,112 @@ tolong() {
 
 # convert ieee754 single-precision float to decimal string
 # (hex) -> string
-fromfloat() {
-	# [todo] don't use gdb as a fucking calculator
-	gdb --batch -ex "print/f (float *) 0x$1" | tail -c+6
+fromfloat(){
+	# bitwise AND with the mask of all mantissa bytes set
+	mantissa=$(( 0x$1 & 0x007fffff ))
+	# same thing but for the exponent, also shift back 23 bytes to get back into the range
+ 	exponent=$(( ( ( 0x$1 & 0x7f800000 ) >> 23 ) - 127 ))
+ 	sign=$(( ( ( 0x$1 & 0x80000000 ) >> 31 ) * -1 ))
+
+	bc -l <<< "2 ^($exponent) * ( 1 + $mantissa / ( 2 ^(22) * 2 ) )"
+}
+
+# convert decimal string to ieee754 single-precision float
+# (string) -> hex
+tofloat(){
+	dec=$1
+
+	# get sign bit
+	if [ "${dec:0:1}" = "-" ]; then
+		dec=${dec:1}
+		sign=0x80000000
+	else
+		sign=0x00000000
+	fi
+
+	# get binary rep of number
+	bin=$(echo "obase=2;$dec" | bc)
+
+	# cut off the first digit becuase it's assumed, and cut off all after 23 + .
+	bin=${bin:1:25}
+
+	# add back the .
+	case $bin in
+		*"."*) ;;
+		*) bin="$bin." ;;
+	esac
+
+	# use the number of decimal places to calculate the exponent after normalization
+	# 1100.1000 has 4 bits before the decimal meaning an exponent of 3
+	places=${bin%\.*}
+	exponent=$(( ${#places} + 127 ))
+
+	# shift exponent behind mantissa
+	exponent=$(( exponent << 23 ))
+
+	# extend to 23 bytes
+	binlen=${#bin}
+	zeros=00000000000000000000000
+	toadd=$(( 24 - binlen ))
+	if (( toadd < 0 )); then
+		toadd=0
+	fi
+	bin="$bin${zeros:0:$toadd}"
+
+	# the decimal point was just for internal reference, remove it and convert to decimal
+	mantissa=$(( 2#${bin/\./} ))
+
+	# combine everything and we're done!
+	printf "%04x" "$(( sign | exponent | mantissa ))"
+
+	# time to do everything again for the double
+}
+
+# convert ieee754 double-precision float to decimal string
+# (hex) -> string
+fromdouble(){
+	mantissa=$(( 0x$1 & 0xfffffffffffff ))
+ 	exponent=$(( ( ( 0x$1 & 0x7ff0000000000000 ) >> 52 ) - 1023 ))
+ 	sign=$(( ( ( 0x$1 & 0x8000000000000000 ) >> 31 ) * -1 ))
+
+	bc -l <<< "2 ^($exponent) * ( 1 + $mantissa / ( 2 ^(51) * 2 ) )"
+}
+
+# convert decimal string to ieee754 single-precision float
+# (string) -> hex
+todouble(){
+	dec=$1
+
+	if [ "${dec:0:1}" = "-" ]; then
+		dec=${dec:1}
+		sign=0x8000000000000000
+	else
+		sign=0x0000000000000000
+	fi
+
+	bin=$(echo "obase=2;$dec" | bc)
+	bin=${bin:1:54}
+
+	case $bin in
+		*"."*) ;;
+		*) bin="$bin." ;;
+	esac
+
+	places=${bin%\.*}
+	exponent=$(( ${#places} + 1023 ))
+
+	exponent=$(( exponent << 52 ))
+
+	binlen=${#bin}
+	zeros=0000000000000000000000000000000000000000000000000000
+	toadd=$(( 53 - binlen ))
+	if (( toadd < 0 )); then
+		toadd=0
+	fi
+	bin="$bin${zeros:0:$toadd}"
+	mantissa=$(( 2#${bin/\./} ))
+
+	printf "%08x" "$(( sign | exponent | mantissa ))"
 }
 
 # (hex)
