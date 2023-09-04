@@ -214,7 +214,6 @@ proc_pkt() {
 			y=$(fromdouble "$y")
 			z=$(fromdouble "$z")
 
-			echo "RESET TO $x $y $z"
 			echo "$x" >"$PLAYER/x"
 			echo "$y" >"$PLAYER/y"
 			echo "$z" >"$PLAYER/z"
@@ -225,6 +224,14 @@ proc_pkt() {
 			# if i don't do this, every single fucking position related packet breaks
 			# i spent like 5 hours trying to figure out why i couldn't place blocks and it turned out to be because i wasn't "confirming" a completely unrelated packet
 			send_packet 00 "$(tovarint "$tid")"
+			;;
+		24) # chunk data and update light
+				# also known as the biggest and most cursed packet
+				chunkx=$(( 0x$(readhex 4) ))
+				chunky=$(( 0x$(readhex 4) ))
+
+				# after this is NBT data. i can't skip it and i can't know how long it is, so this is as far as i get without writing a dedicated parser.
+
 			;;
 		35) # player chat
 			uuid=$(readhex 16)
@@ -272,7 +279,7 @@ proc_pkt() {
 			# dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# echo "$eid moved $dx $dy $dz"
-			pkt_hook_entity_move $eid
+			pkt_hook_entity_move "$eid"
 			;;
 		2c) # update entity position and rotation
 			# eid=$(fromvarint)
@@ -280,7 +287,7 @@ proc_pkt() {
 			# dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# echo "$eid moved $dx $dy $dz"
-			pkt_hook_entity_move $eid
+			pkt_hook_entity_move "$eid"
 			;;
 		01) # spawn entity
 			eid=$(fromvarint)
@@ -291,9 +298,9 @@ proc_pkt() {
 			uuid=$(readhex 16)
 			type=$(fromvarint)
 
-			readhex 8 >"$entity/x"
-			readhex 8 >"$entity/y"
-			readhex 8 >"$entity/z"
+			fromdouble "$(readhex 8)" >"$entity/x"
+			fromdouble "$(readhex 8)" >"$entity/y"
+			fromdouble "$(readhex 8)" >"$entity/z"
 
 			eatn 3 # angle stuff
 
