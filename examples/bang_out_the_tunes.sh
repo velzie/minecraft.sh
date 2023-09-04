@@ -1,7 +1,7 @@
-. src/minecraft.sh
-. examples/demohooks.sh
-trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
+source src/minecraft.sh
+source examples/demohooks.sh
 
+m_cleanup_on_exit
 
 # if noteblocks exist at these coordinates, this example will attempt to play them
 BLOCKS=("-4 81 3" "-4 81 1" "-5 82 1" "-5 82 0" "-5 81 -1")

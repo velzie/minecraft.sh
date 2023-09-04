@@ -33,9 +33,7 @@ pkt_hook_set_health(){
 pkt_hook_player_spawn(){
 	echo "player $eid spawned"
 }
-pkt_hook_entity_spawn(){
-	echo "player $eid spawned"
-}
+
 
 pkt_hook_disconnect(){
 	echo "---- disconnected from server ----"
@@ -44,4 +42,8 @@ pkt_hook_kicked(){
 	echo -n "kicked from server: "
 	echosafe "$1" | fromhex
 	echo
+}
+pkt_hook_system_chat(){
+	translate=$(echosafe "$1" | fromhex | jq -r ".translate")
+	echo "<system>: $translate"
 }

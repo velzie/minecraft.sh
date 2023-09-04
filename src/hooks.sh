@@ -13,9 +13,30 @@ pkt_hook_login() {
 pkt_hook_entity_move() {
   :
 }
-### called whenever a chat message is sent
+
+### called whenever a player chat message is sent
 # (uuid, message: hex string, timestamp: hex long, metadata: json string as hex)
 pkt_hook_chat() {
+  :
+}
+
+### called whenever the system sends you a chat event
+### player death, running an invalid command, actionbar, etc
+# (metadata: json string as hex)
+pkt_hook_system_chat(){
+  :
+}
+
+### called on certain types of chat events, i don't know which ones
+# not sure what the arguments mean
+pkt_hook_disguised_chat(){
+  :
+}
+
+### called whenever the player joins the game or is teleported
+### after this packet, player position will be accessible inside $PLAYER/x, $PLAYER/y, etc
+# (x: decimal string, y: decimal string, z: decimal string)
+pkt_hook_synchronize_player_position(){
   :
 }
 

@@ -65,7 +65,7 @@ pkt_chat() {
 }
 
 ### runs a server command
-### note: there is currently no way to recieve the feedback after the command
+### the command response is recieved in pkt_hook_system_chat
 # $0 "kill CoolElectronics"
 # (command: string)
 pkt_chat_command() {
@@ -116,7 +116,7 @@ pkt_block_interact(){
 }
 
 ### attack an entity
-# # attempt to attack every entity in view distance
+# # attempt to attack every entity in view distance whenever it moves
 # pkt_hook_entity_move(){
 # 	eid=$1
 # 	$0 $eid
@@ -183,12 +183,62 @@ pkt_sneak() {
 	incrm_seqid
 }
 
+### teleport to a coordinate, within reason
+# (x: decimal string, y: decimal string, z: decimal string, onground: 0 | 1)
+pkt_set_position(){
+
+	x=$(denormalize $1)
+	y=$(denormalize $2)
+	z=$(denormalize $3)
+
+
+	pkt=$(todouble "$x")
+	pkt+=$(todouble "$y")
+	pkt+=$(todouble "$z")
+	pkt+=$(tobool "$4")
+
+	echo "$x" >"$PLAYER/x"
+	echo "$y" >"$PLAYER/y"
+	echo "$z" >"$PLAYER/z"
+
+	send_packet 14 "$pkt"
+}
+
+# a quick hack to fix my shitty float implementation
+denormalize(){
+	if (( $(echo "${1#-} < 1" | bc -l) )); then
+		if (( $(echo "$1 < 0" | bc -l) )); then
+			echo -n "-1"
+		else
+			echo -n "1"
+		fi
+	else
+		echosafe "$1"
+	fi
+}
+
+### tell server if you're grounded or not
+# (0 | 1)
+pkt_set_on_ground(){
+	send_packet 17 "$(tobool $1)"
+}
+
+### select an item from the hotbar
+# (item: 0-8)
+pkt_pick_item(){
+	send_packet 1a "$(tovarint "$1")"
+}
+
+### use item (eg, throw snowball)
+pkt_use_item(){
+	get_seqid
+	send_packet 32 "$(tovarint 0)$(tovarint $SEQ_ID)"
+	incrm_seqid
+}
+
 pkt_use_item_on() {
 	get_seqid
-	send_packet 31 "$(tovarint 0)$(encode_position 7 -60 -2)$(tovarint 1)3f0000003f8000003f000000$(tobool 0)$(tovarint "$SEQ_ID")"
+	send_packet 31 "$(tovarint 0)$(encode_position 5 -60 14)$(tovarint 1)3f0000003f8000003f000000$(tobool 0)$(tovarint "$SEQ_ID")"
 	pkt_swing_arm 0
-	incrm_seqid
-	get_seqid
-	# send_packet 32 "$(tovarint 0)$(tovarint $SEQ_ID)"
 	incrm_seqid
 }

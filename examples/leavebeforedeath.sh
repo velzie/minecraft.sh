@@ -1,6 +1,6 @@
 source src/minecraft.sh
 source examples/demohooks.sh
-trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
+m_cleanup_on_exit
 
 THRESHOLD="7.0"
 # attempt to leave when health falls below THRESHOLD

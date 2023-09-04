@@ -4,8 +4,8 @@
 . src/hooks.sh
 . src/types.sh
 . src/packet.sh
-. src/types.sh
 . src/util.sh
+. src/macros.sh
 
 # default consts
 HOST=localhost
@@ -191,15 +191,40 @@ proc_pkt() {
 			id=$(readhex 9999)
 			send_packet 12 "$id"
 			;;
-
 		45) # server data
 			len=$(fromvarint)
 			read -rn"$len" motd
-
-			echo "MOTD: $motd"
+			# echo "MOTD: $motd"
 			;;
 		3a) # player info (tab)
 			# i'll leave this unimplemented it's annoying
+			;;
+		3c) # synchronize player position
+			x=$(readhex 8)
+			y=$(readhex 8)
+			z=$(readhex 8)
+			yaw=$(readhex 4)
+			pitch=$(readhex 4)
+			flags=$(readhex 1)
+
+			tid=$(fromvarint)
+
+
+			x=$(fromdouble "$x")
+			y=$(fromdouble "$y")
+			z=$(fromdouble "$z")
+
+			echo "RESET TO $x $y $z"
+			echo "$x" >"$PLAYER/x"
+			echo "$y" >"$PLAYER/y"
+			echo "$z" >"$PLAYER/z"
+
+			pkt_hook_synchronize_player_position "$x" "$y" "$z" "$flags"
+
+			# i should "confirm" the synchronization? what
+			# if i don't do this, every single fucking position related packet breaks
+			# i spent like 5 hours trying to figure out why i couldn't place blocks and it turned out to be because i wasn't "confirming" a completely unrelated packet
+			send_packet 00 "$(tovarint "$tid")"
 			;;
 		35) # player chat
 			uuid=$(readhex 16)
@@ -215,13 +240,18 @@ proc_pkt() {
 			;;
 		1b) # disguised chat message. not really sure when this is used?
 			len=$(fromvarint)
-			message=$(readn "$len")
+			message=$(readhex "$len")
 			len=$(fromvarint)
-			typename=$(readn "$len")
+			typename=$(readhex "$len")
 			hasname=$(readhex 1)
 			len=$(fromvarint)
 			name=$(readn "$len")
-			echo "<system>-$message-$typename-$hasname-$name"
+
+			pkt_hook_disguised_chat "$message" "$typename" "$hasname" "$name"
+			;;
+		64) # system chat message
+			len=$(fromvarint)
+			pkt_hook_system_chat "$(readhex "$len")"
 			;;
 		38) # combat death
 			id=$(fromvarint)
@@ -242,7 +272,7 @@ proc_pkt() {
 			# dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# echo "$eid moved $dx $dy $dz"
-			# pkt_hook_entity_move $eid
+			pkt_hook_entity_move $eid
 			;;
 		2c) # update entity position and rotation
 			# eid=$(fromvarint)
@@ -250,7 +280,7 @@ proc_pkt() {
 			# dy=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# dz=$(( ( 0x$(readhex 2) - (128 * 256) ) / (128 * 32) ))
 			# echo "$eid moved $dx $dy $dz"
-			# pkt_hook_entity_move $eid
+			pkt_hook_entity_move $eid
 			;;
 		01) # spawn entity
 			eid=$(fromvarint)
