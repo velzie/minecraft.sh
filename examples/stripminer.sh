@@ -3,7 +3,7 @@ source src/minecraft.sh
 source examples/demohooks.sh
 
 m_cleanup_on_exit
-DELAY=0
+DELAY=0.25
 
 
 start_login
@@ -35,6 +35,6 @@ while true; do
 	  m_mine_relative -1 1 "-$i" "$DELAY"
   done
 
-	# sleep 0.1
+	sleep 0.1
 done
 

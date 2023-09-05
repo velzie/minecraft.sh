@@ -58,6 +58,7 @@ pkt_handshake() {
 # pkt_hook_combat_death() {
 # 	$0
 # }
+# no arguments
 pkt_respawn() {
 	pkt_send 07 "$(tovarint 0)"
 }
