@@ -2,7 +2,7 @@
 <p align="center"><img src="./assets/logo.png" alt="logo" height="100"></p>
 <p align="center">A minecraft client/bot library written in pure bash + coreutils</p>
 <div align="center">
-  <a href="https://github.com/CoolElectronics/minecraft.sh"><img alt="github" src="https://img.shields.io/badge/github-coolelectronics/minecraft.sh?style=for-the-badge&labelColor=555555&logo=github&c=a" height="20"></a>
+  <a href="https://github.com/CoolElectronics/minecraft.sh"><img alt="github" src="https://img.shields.io/badge/github-coolelectronics/minecraft.sh-default?logo=github" height="20"></a>
   <img src="https://img.shields.io/github/stars/CoolElectronics/minecraft.sh?" />
 </div>
 
