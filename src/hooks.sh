@@ -28,7 +28,8 @@ pkt_hook_system_chat(){
 }
 
 ### called on certain types of chat events, i don't know which ones
-# not sure what the arguments mean
+### not entirely sure what the arguments mean
+# (message: hex string, typename: hex string, hasname: 0 | 1, name: hex string)"
 pkt_hook_disguised_chat(){
   :
 }

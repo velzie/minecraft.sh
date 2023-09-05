@@ -1,3 +1,4 @@
+# shellcheck shell=ksh
 source src/minecraft.sh
 source examples/demohooks.sh
 m_cleanup_on_exit

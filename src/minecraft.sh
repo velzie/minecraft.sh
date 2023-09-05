@@ -27,7 +27,7 @@ start_login() {
 	fi
 
 	# ensure we're the only one
-	lsof -t lsof | xargs kill
+	# lsof -t lsof | xargs kill
 	exec 4<>lsof
 
 	# we need to create temporary files in memory because bash cannot send between subshells
@@ -252,7 +252,7 @@ proc_pkt() {
 			typename=$(readhex "$len")
 			hasname=$(readhex 1)
 			len=$(fromvarint)
-			name=$(readn "$len")
+			name=$(readhex "$len")
 
 			pkt_hook_disguised_chat "$message" "$typename" "$hasname" "$name"
 			;;

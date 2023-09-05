@@ -13,7 +13,7 @@ eatn(){
 
 # (repetitions: number, string) -> string
 repeat() {
-	printf -- "$2%.0s" $(seq 1 $1)
+	printf -- "$2%.0s" $(seq 1 "$1")
 }
 
 # (bytes: number) -> hex string

@@ -1,3 +1,4 @@
+# shellcheck shell=ksh
 source src/minecraft.sh
 source examples/demohooks.sh
 
@@ -10,13 +11,7 @@ BLOCKS=("-4 81 3" "-4 81 1" "-5 82 1" "-5 82 0" "-5 81 -1")
 
 
 
-# reconnect on disconnect or timeout
 USERNAME=neil
-
-pkt_hook_disconnect(){
-	start_login
-	echo "---- disconnected from server ----"
-}
 
 start_login
 
@@ -28,6 +23,7 @@ randsleep(){
 while true; do
 	wait_on_login
 	for block in "${BLOCKS[@]}"; do
+		# shellcheck disable=SC2046 # intended splitting of $block
 	  pkt_dig $DIG_START $block $FACE_TOP
 	  pkt_dig $DIG_CANCEL $block $FACE_TOP
 	  randsleep
