@@ -60,6 +60,7 @@ wait_on_login
 stty -echo
 tput civis
 clear
+printf "\033[0;30m"
 rerender
 while true; do
   tput cvvis
