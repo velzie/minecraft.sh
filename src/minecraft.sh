@@ -61,13 +61,13 @@ start_login() {
 		mkdir "$TEMP"
 	fi
 
-	# ensure we're the only one
+	# ensure we're the only one for debugging
 	# lsof -t lsof | xargs kill
-	exec 4<>lsof
+	# exec 4<>lsof
 
 	# we need to create temporary files in memory because bash cannot send between subshells
-	PLAYER_ID=$RANDOM
-	PLAYER="$TEMP/$USERNAME:$PLAYER_ID.mem"
+	PLAYER_ID=$$
+	PLAYER="$TEMP/$USERNAME.$PLAYER_ID"
 	ENTITIES="$PLAYER/entities"
 	LISTENER_PID="$TEMP/$PLAYER_ID.pid"
 	PARENT_PID="$TEMP/$PLAYER_ID.ppid"
@@ -116,8 +116,6 @@ listen() {
 		len=$(fromvarint)
 
 		if [ "$len" == "" ]; then
-
-			echo "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 			pkt_hook_disconnect
 			disconnect
 		fi
@@ -171,7 +169,6 @@ deflate_pkt() {
 proc_pkt() {
 	pkt_id=$(readhex 1)
 	if [ "$pkt_id" == "" ]; then
-		echo "WAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 		pkt_hook_disconnect
 		disconnect
 		exit

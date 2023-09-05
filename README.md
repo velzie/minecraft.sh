@@ -29,6 +29,13 @@ If you were looking for an actual featured bot library, there are probably bette
 | Online-Mode support  | :x:                  |
 | Old protocol versions| :x:                  |
 
+## Cool demos
+
+### Chat client (see examples/chatclient.sh)
+
+### Auto-stripminer (see examples/stripminer.sh)
+
+
 ## How to use
 minecraft.sh provides a simple high level library API for creating bots that can be easily used in any shell script. For example, here's a simple bot that will automatically "strip mine" in a straight line
 
