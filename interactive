@@ -4,6 +4,7 @@ m_cleanup_on_exit
 bash --init-file <(cat ~/.bashrc - <<<"
 . src/minecraft.sh
 . examples/demohooks.sh
+
 start_login
 wait_on_login
 ")

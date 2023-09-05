@@ -8,10 +8,10 @@
 . src/macros.sh
 
 # default consts
-HOST=localhost
-PORT=25565
+HOST=${HOST:-localhost}
+PORT=${PORT:-25565}
+USERNAME=${USERNAME:-sh}
 TEMP=/dev/shm/minecraft.sh
-USERNAME=sh
 VERSION=763 # 1.20.1, the latest version at the time of making this. be warned, packet ids and format can change drastically between versions
 
 # states:
@@ -21,6 +21,40 @@ VERSION=763 # 1.20.1, the latest version at the time of making this. be warned, 
 # 3: play
 
 
+### gets the ping of a server, player count, MOTD, icon, etc
+# HOST=endcrystal.me
+# json=$(server_list_ping)
+# echo "$json" | jq ".description.text"
+# echo "players: $(echo "$json" | jq ".players.online")/$(echo "$json" | jq ".players.max")"
+# echo "version: $(echo "$json" | jq ".version.name")"
+# echo "ping: ${ping}ms"
+# returns a JSON string
+server_list_ping() {
+	exec 3<>"/dev/tcp/$HOST/$PORT"
+
+	LZ_THRESHOLD=-1
+	pkt_handshake $HANDSHAKE_STATUS
+	pkt_send 00
+
+	readn "$(fromvarint <&3)" <&3 | proc_pkt
+
+	ts=$(date +%s%N)
+	{
+		pkt_send 01 "$(tolong "$(date +%s)")00000000"
+		readn "$(fromvarint <&3)" <&3 | proc_pkt >/dev/null
+	}
+	ping=$(( ( $(date +%s%N) - ts ) / 1000000 ))
+}
+
+### start the login process
+### PORT is 25565 by default, HOST is localhost by default, USERNAME is sh
+# HOST=tf2.mercurywork.shop
+# PORT=25565
+# USERNAME=juliet
+# start_login
+# # you must call wait_on_login before sending packets
+# wait_on_login
+# pkt_swing_arm $ARM_LEFT
 start_login() {
 	if ! [ -d "$TEMP" ]; then
 		mkdir "$TEMP"
@@ -39,30 +73,28 @@ start_login() {
 	mkdir -p "$PLAYER"
 	mkdir -p "$ENTITIES"
 
-
 	# spawn sigil process
-	( read <> <(:) ) &
+	(read <> <(:)) &
 	WAITPID=$!
 
-
 	echo "ID: $PLAYER_ID"
-	exec 3<>/dev/tcp/$HOST/$PORT
-
+	exec 3<>"/dev/tcp/$HOST/$PORT"
 
 	LZ_THRESHOLD=-1
-	echo "$LZ_THRESHOLD">"$PLAYER/lzthreshold"
+	echo "$LZ_THRESHOLD" >"$PLAYER/lzthreshold"
 	STATE=0
-	send_packet 00 "$(tovarint $VERSION)$(tostring $HOST)$(toshort $PORT)$(tovarint 2)"
-	STATE=2
-	send_packet 00 "$(tostring $USERNAME)00"
+	pkt_handshake $HANDSHAKE_LOGIN
+	pkt_send 00 "$(tostring "$USERNAME")00"
 
 	listen <&3 &
 	echo "$!" >$LISTENER_PID
 	echo "$$" >$PARENT_PID
-
 }
-wait_on_login(){
-	wait "$WAITPID">/dev/null
+
+### wait for login to finish
+### you MUST call this at least once before sending any packets
+wait_on_login() {
+	wait "$WAITPID" >/dev/null
 	LZ_THRESHOLD=$(<"$PLAYER/lzthreshold")
 }
 
@@ -82,7 +114,6 @@ listen() {
 		# get packet length
 		len=$(fromvarint)
 
-
 		if [ "$len" == "" ]; then
 
 			echo "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
@@ -96,7 +127,7 @@ listen() {
 		# we need to process packets as fast as physically possible, if we fall out of sync we'll eventually fail to process 0x23 Keep Alive and the server will kick us
 		#
 		# despite my best efforts, standard bash tends to fall behind and will inevitably get kicked. ksh20 is fast enough for our use though
-		
+
 		PACKET="$PLAYER/$RANDOM.dmp"
 		readn "$len" <&3 >"$PACKET"
 
@@ -113,7 +144,7 @@ listen() {
 	done
 }
 
-deflate_pkt(){
+deflate_pkt() {
 	if [ ! -f "$PACKET" ]; then
 		echo "dropped packet of length $len"
 		# pkt_hook_disconnect
@@ -122,22 +153,21 @@ deflate_pkt(){
 	fi
 
 	{
-	if [ "$LZ_THRESHOLD" != "-1" ]; then
-		len=$(fromvarint)
-		if [ "$len" != "0" ]; then
-			fromlz | proc_pkt
+		if [ "$LZ_THRESHOLD" != "-1" ]; then
+			len=$(fromvarint)
+			if [ "$len" != "0" ]; then
+				fromlz | proc_pkt
+			else
+				proc_pkt
+			fi
 		else
 			proc_pkt
 		fi
-	else
-		proc_pkt
-	fi
 	} <"$PACKET"
 	rm "$PACKET"
 }
 
 proc_pkt() {
-	
 	pkt_id=$(readhex 1)
 	if [ "$pkt_id" == "" ]; then
 		echo "WAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -147,9 +177,20 @@ proc_pkt() {
 	fi
 
 	case $STATE in
-	0) ;;
-	1) ;;
-	2)
+	0) # handshaking
+		;;
+	1) # status
+		case "$pkt_id" in 
+		00) # status response
+			len=$(fromvarint)
+			readn "$len"
+			;;
+		01) # ping response
+			echo $(( 0x$(readhex 8) ))
+			;;
+		esac
+		;;
+	2) # login
 		case $pkt_id in
 		00) # disconnect
 			echo "Failed to login"
@@ -167,11 +208,11 @@ proc_pkt() {
 			;;
 		03)
 			LZ_THRESHOLD=$(fromvarint)
-			echo "$LZ_THRESHOLD">"$PLAYER/lzthreshold"
+			echo "$LZ_THRESHOLD" >"$PLAYER/lzthreshold"
 			;;
 		esac
 		;;
-	3)
+	3) # play
 		case $pkt_id in
 		28) # login (play)
 			# this function needs to be called before it's safe to do anything else
@@ -179,6 +220,17 @@ proc_pkt() {
 			# for some reason the EID is sent as a short here, everywhere else it's a varint
 			echo -n $((0x$(readhex 4))) >"$PLAYER/eid"
 			echo -n 0 >"$PLAYER/seqid"
+
+			# send client information
+			pkt=$(tostring "en_US") # RAHHHHH
+			pkt+="01"               # our render distance. must be as small as possible to avoid timeouts
+			pkt+="00"               # enable chat
+			pkt+="00"               # disable chat colors
+			pkt+="00"               # skin stuff
+			pkt+="01"               # right hand default
+			pkt+="00"               # "text filtering? what"
+			pkt+="01"               # show up in tab menu
+			pkt_send 08 "$pkt"
 
 			# killing a sigil lamb is the most efficient way that i know of unblocking `wait_on_login` on the parent
 			kill -9 "$WAITPID"
@@ -189,7 +241,7 @@ proc_pkt() {
 			;;
 		23) # keepalive
 			id=$(readhex 9999)
-			send_packet 12 "$id"
+			pkt_send 12 "$id"
 			;;
 		45) # server data
 			len=$(fromvarint)
@@ -209,7 +261,6 @@ proc_pkt() {
 
 			tid=$(fromvarint)
 
-
 			x=$(fromdouble "$x")
 			y=$(fromdouble "$y")
 			z=$(fromdouble "$z")
@@ -223,14 +274,14 @@ proc_pkt() {
 			# i should "confirm" the synchronization? what
 			# if i don't do this, every single fucking position related packet breaks
 			# i spent like 5 hours trying to figure out why i couldn't place blocks and it turned out to be because i wasn't "confirming" a completely unrelated packet
-			send_packet 00 "$(tovarint "$tid")"
+			pkt_send 00 "$(tovarint "$tid")"
 			;;
 		24) # chunk data and update light
-				# also known as the biggest and most cursed packet
-				chunkx=$(( 0x$(readhex 4) ))
-				chunky=$(( 0x$(readhex 4) ))
+			# also known as the biggest and most cursed packet
+			chunkx=$((0x$(readhex 4)))
+			chunky=$((0x$(readhex 4)))
 
-				# after this is NBT data. i can't skip it and i can't know how long it is, so this is as far as i get without writing a dedicated parser.
+			# after this is NBT data. i can't skip it and i can't know how long it is, so this is as far as i get without writing a dedicated parser.
 
 			;;
 		35) # player chat

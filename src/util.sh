@@ -11,6 +11,11 @@ eatn(){
 	readn "$1" >/dev/null
 }
 
+# timestamp
+timestamp(){
+	date +%s
+}
+
 # (repetitions: number, string) -> string
 repeat() {
 	printf -- "$2%.0s" $(seq 1 "$1")

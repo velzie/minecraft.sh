@@ -13,16 +13,16 @@ incrm_seqid() {
 # # "2f" is the serverbound packet id for "swing arm" and 1 here means "left hand"
 # # see the full list of packets at https://wiki.vg/Protocol
 # (packet_num: hex(2), data: hex)
-send_packet() {
+pkt_send() {
 	# length of the to-be-compressed packet data + packet id
-	len=$(( ${#2} / 2 + 1 ))
+	len=$((${#2} / 2 + 1))
 	if [ "$LZ_THRESHOLD" != "-1" ]; then
 
 		# buggy code for packet compression
 		# compression is actually optional C2S so it's safe to ignore
 
 		# if (( $len >= $LZ_THRESHOLD )); then
-		# 	
+		#
 		# 	# data to be compressed (packet id + packet data)
 		# 	pkt="$1$2"
 		# 	pkt_compressed="$(echo -n "$pkt" | fromhex | tolz | tohex)"
@@ -33,9 +33,9 @@ send_packet() {
 		#
 		# 	echo -n "$(tovarint "$pkt_len")$(tovarint "$len")$pkt_compressed" | fromhex >&3
 		# else
-			# compression set, but don't compress packet
-			# add an extra byte to the length, we need to compensate for the "00" (compression length of 0)
-			echo -n "$(tovarint "$(( len + 1 ))")00$1$2" | fromhex>&3
+		# compression set, but don't compress packet
+		# add an extra byte to the length, we need to compensate for the "00" (compression length of 0)
+		echo -n "$(tovarint "$((len + 1))")00$1$2" | fromhex >&3
 		# fi
 	else
 		# compression isn't enabled, send as normal
@@ -43,25 +43,36 @@ send_packet() {
 	fi
 }
 
+HANDSHAKE_STATUS=1
+HANDSHAKE_LOGIN=2
+pkt_handshake() {
+	pkt=$(tovarint "$VERSION")
+	pkt+=$(tostring "$HOST")
+	pkt+=$(toshort "$PORT")
+	pkt+=$(tovarint "$1")
+	pkt_send 00 "$pkt"
+	STATE=$1
+}
+
 ### respawn the player after a death
 # pkt_hook_combat_death() {
 # 	$0
 # }
 pkt_respawn() {
-	send_packet 07 "$(tovarint 0)"
+	pkt_send 07 "$(tovarint 0)"
 }
 
 ### sends a message in public chat
 # $0 "hello! I sent a chat message!"
 # (message: string)
 pkt_chat() {
-	pkt=$(tostring "$1")         # message
-	pkt+=$(tolong "$(date +%s)") # timestamp
-	pkt+=$(tolong "$(date +%s)") # salt
-	pkt+="00"                    # has signature, bool(false)
-	pkt+="$(tovarint 1)"         # message count? idk what this means
-	pkt+="$(repeat 11 '00')"     # "acknowleged"?? no idea what this is either but if i spam exactly 11 zeros it seems to work
-	send_packet 05 "$pkt"
+	pkt=$(tostring "$1")          # message
+	pkt+=$(tolong "$(timestamp)") # timestamp
+	pkt+=$(tolong "$(timestamp)") # salt
+	pkt+="00"                     # has signature, bool(false)
+	pkt+="$(tovarint 1)"          # message count? idk what this means
+	pkt+="$(repeat 11 '00')"      # "acknowleged"?? no idea what this is either but if i spam exactly 11 zeros it seems to work
+	pkt_send 05 "$pkt"
 }
 
 ### runs a server command
@@ -69,13 +80,13 @@ pkt_chat() {
 # $0 "kill CoolElectronics"
 # (command: string)
 pkt_chat_command() {
-	pkt=$(tostring "$1")         # message
-	pkt+=$(tolong "$(date +%s)") # timestamp
-	pkt+=$(tolong "$(date +%s)") # salt
-	pkt+=$(tovarint 0)           # idk some crypto bullshit
-	pkt+=$(tovarint 1)           # message count
-	pkt+="$(repeat 11 '00')"     # "acknowleged"
-	send_packet 04 "$pkt"
+	pkt=$(tostring "$1")          # message
+	pkt+=$(tolong "$(timestamp)") # timestamp
+	pkt+=$(tolong "$(timestamp)") # salt
+	pkt+=$(tovarint 0)            # idk some crypto bullshit
+	pkt+=$(tovarint 1)            # message count
+	pkt+="$(repeat 11 '00')"      # "acknowleged"
+	pkt_send 04 "$pkt"
 }
 
 ARM_RIGHT=0
@@ -84,7 +95,7 @@ ARM_LEFT=1
 # $0 $ARM_RIGHT
 # (arm: ARM_LEFT | ARM_RIGHT)
 pkt_swing_arm() {
-	send_packet 2f "$(tovarint "$1")"
+	pkt_send 2f "$(tovarint "$1")"
 }
 
 ### interact with an entity
@@ -100,10 +111,10 @@ pkt_interact() {
 	pkt+=$(tovarint 0) # enum for "innteract"
 	pkt+=$(tovarint "$2")
 	pkt+=$(tobool "$3")
-	send_packet 10 "$pkt"
+	pkt_send 10 "$pkt"
 }
 
-pkt_block_interact(){
+pkt_block_interact() {
 	pkt=$(tovarint "$(<"$PLAYER/eid")")
 	pkt+=$(tovarint 2)
 	pkt+=$1
@@ -111,7 +122,7 @@ pkt_block_interact(){
 	pkt+=$3
 	pkt+=$(tovarint 0)
 	pkt+=$(tobool 0)
-	send_packet 10 "$pkt"
+	pkt_send 10 "$pkt"
 
 }
 
@@ -127,7 +138,7 @@ pkt_attack() {
 	pkt+=$(tovarint 1) # enum for "attack"
 	pkt+="00"          # "sneaking" i don't know why it needs to know this, but ok
 
-	send_packet 10 "$pkt"
+	pkt_send 10 "$pkt"
 }
 
 FACE_BOTTOM=0
@@ -148,7 +159,7 @@ pkt_drop() {
 	pkt+=$(tovarint $FACE_BOTTOM) # facing -Y, always
 
 	pkt+=$(tovarint "$SEQ_ID")
-	send_packet 1d "$pkt"
+	pkt_send 1d "$pkt"
 	incrm_seqid
 }
 
@@ -166,7 +177,7 @@ pkt_dig() {
 	pkt+=$(encode_position "$2" "$3" "$4")
 	pkt+=$(tovarint $5)
 	pkt+=$(tovarint "$SEQ_ID")
-	send_packet 1d "$pkt"
+	pkt_send 1d "$pkt"
 	incrm_seqid
 }
 
@@ -179,18 +190,17 @@ pkt_sneak() {
 	pkt=$(tovarint "$(<"$PLAYER/eid")") # player entity id
 	pkt+=$(tovarint "$1")               # enum for sneak
 	pkt+=$(tovarint "$SEQ_ID")
-	send_packet 1e "$pkt"
+	pkt_send 1e "$pkt"
 	incrm_seqid
 }
 
 ### teleport to a coordinate, within reason
 # (x: decimal string, y: decimal string, z: decimal string, onground: 0 | 1)
-pkt_set_position(){
+pkt_set_position() {
 
 	x=$(denormalize $1)
 	y=$(denormalize $2)
 	z=$(denormalize $3)
-
 
 	pkt=$(todouble "$x")
 	pkt+=$(todouble "$y")
@@ -201,13 +211,13 @@ pkt_set_position(){
 	echo "$y" >"$PLAYER/y"
 	echo "$z" >"$PLAYER/z"
 
-	send_packet 14 "$pkt"
+	pkt_send 14 "$pkt"
 }
 
 # a quick hack to fix my shitty float implementation
-denormalize(){
-	if (( $(echo "${1#-} < 1" | bc -l) )); then
-		if (( $(echo "$1 < 0" | bc -l) )); then
+denormalize() {
+	if (($(echo "${1#-} < 1" | bc -l))); then
+		if (($(echo "$1 < 0" | bc -l))); then
 			echo -n "-1"
 		else
 			echo -n "1"
@@ -219,26 +229,26 @@ denormalize(){
 
 ### tell server if you're grounded or not
 # (0 | 1)
-pkt_set_on_ground(){
-	send_packet 17 "$(tobool $1)"
+pkt_set_on_ground() {
+	pkt_send 17 "$(tobool $1)"
 }
 
 ### select an item from the hotbar
 # (item: 0-8)
-pkt_pick_item(){
-	send_packet 1a "$(tovarint "$1")"
+pkt_pick_item() {
+	pkt_send 1a "$(tovarint "$1")"
 }
 
 ### use item (eg, throw snowball)
-pkt_use_item(){
+pkt_use_item() {
 	get_seqid
-	send_packet 32 "$(tovarint 0)$(tovarint $SEQ_ID)"
+	pkt_send 32 "$(tovarint 0)$(tovarint $SEQ_ID)"
 	incrm_seqid
 }
 
 pkt_use_item_on() {
 	get_seqid
-	send_packet 31 "$(tovarint 0)$(encode_position 5 -60 14)$(tovarint 1)3f0000003f8000003f000000$(tobool 0)$(tovarint "$SEQ_ID")"
+	pkt_send 31 "$(tovarint 0)$(encode_position 5 -60 14)$(tovarint 1)3f0000003f8000003f000000$(tobool 0)$(tovarint "$SEQ_ID")"
 	pkt_swing_arm 0
 	incrm_seqid
 }
