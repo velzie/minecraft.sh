@@ -32,9 +32,9 @@ If you were looking for an actual featured bot library, there are probably bette
 ## Cool demos
 
 ### Chat client (see examples/chatclient.sh)
-![](assets/chatclient.mp4)
+https://github.com/CoolElectronics/minecraft.sh/assets/58010778/e1983ea0-3156-4ce5-83a1-6f085be2f1cf
 ### Auto-stripminer (see examples/stripminer.sh)
-![](https://github.com/CoolElectronics/minecraft.sh/raw/master/assets/stripminer.mp4)
+https://github.com/CoolElectronics/minecraft.sh/assets/58010778/29641d51-603f-4c0e-b031-7dbf324000e0
 ## How to use
 minecraft.sh provides a simple high level library API for creating bots that can be easily used in any shell script. For example, here's a simple bot that will automatically "strip mine" in a straight line
 
