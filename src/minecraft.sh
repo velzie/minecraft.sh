@@ -1,6 +1,7 @@
 # shellcheck shell=ksh
 # shellcheck disable=SC2034
 
+export LC_ALL=C
 . src/hooks.sh
 . src/types.sh
 . src/packet.sh
