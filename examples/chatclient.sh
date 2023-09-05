@@ -106,6 +106,8 @@ while true; do
       :>"$PLAYER/chatbuf"
       ;;
     $'\x03') # ctrl+c
+      tput cvvis
+      stty echo
       exit
       ;;
     $'\x1b' | $'\x7f') # larrow | backspace
@@ -119,4 +121,5 @@ while true; do
   rerender
   mutex_unlock
 done
+tput cvvis
 stty echo

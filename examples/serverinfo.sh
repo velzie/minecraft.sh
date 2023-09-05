@@ -2,6 +2,8 @@
 source src/minecraft.sh
 
 
+# print MOTD, version, etc for a server
+
 HOST=endcrystal.me
 json=$(server_list_ping)
 name=$(echo "$json" | jq -r ".description.text")

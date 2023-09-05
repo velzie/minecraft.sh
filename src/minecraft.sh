@@ -41,8 +41,8 @@ server_list_ping() {
 	ts=$(date +%s%N)
 	{
 		pkt_send 01 "$(tolong "$(date +%s)")00000000"
-		readn "$(fromvarint <&3)" <&3 | proc_pkt >/dev/null
-	}
+		readn "$(fromvarint <&3)" <&3 | proc_pkt
+	} >/dev/null
 	ping=$(( ( $(date +%s%N) - ts ) / 1000000 ))
 }
 

@@ -13,6 +13,7 @@ m_get_player_pos(){
 
 ### terminates all jobs on exit
 m_cleanup_on_exit(){
+	# shellcheck disable=SC2064 # expanding now is intended
 	trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 }
 
