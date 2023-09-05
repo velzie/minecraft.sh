@@ -103,9 +103,9 @@ disconnect() {
 	exec 3>&-
 	exec 3<&-
 	if [ -n "$PLAYER" ] && [ -d "$PLAYER" ]; then
-		rm -r "$PLAYER"
+		rm -r "$PLAYER" >/dev/null
 	fi
-	kill "$(<"$LISTENER_PID")"
+	kill "$(<"$LISTENER_PID")">/dev/null
 }
 
 listen() {
@@ -163,7 +163,7 @@ deflate_pkt() {
 			proc_pkt
 		fi
 	} <"$PACKET"
-	rm "$PACKET"
+	rm "$PACKET" >/dev/null
 }
 
 proc_pkt() {
